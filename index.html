@@ -1509,8 +1509,9 @@ const NAMUS_UNIDENTIFIED_URL = 'https://www.namus.gov/api/CaseSets/NamUs/Unident
 // ── SET THIS to your Cloudflare Worker URL after deploying the proxy ──────────
 // See PROXY_README.md in the casenet-proxy folder for setup instructions.
 // Leave as null to use mock data.
-const CASENET_PROXY = 'https://casenet.sergiop-raza.workers.dev';
-// Example: const CASENET_PROXY = 'https://casenet-proxy.yourname.workers.dev';
+const CASENET_PROXY = null;
+// Set this to your Cloudflare Worker URL when you deploy the proxy:
+// const CASENET_PROXY = 'https://casenet.untruesudo.workers.dev';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CORS_PROXIES = [
@@ -1786,10 +1787,11 @@ const MOCK_HOMICIDES = [
 // Falls back silently to mock data if files not yet present
 
 async function loadStaticData() {
-    // Base URL for data files — works on GitHub Pages and localhost
+    // Base URL for data files — works on GitHub Pages (subdirectory) and localhost
+    // Use the script's own origin + pathname directory, not href manipulation
     const base = window.location.protocol === 'file:'
-        ? ''
-        : window.location.href.replace(/\/[^/]*$/, '');
+        ? '.'
+        : window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
 
     let homicides    = [];
     let unidentified = [];
