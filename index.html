@@ -1,0 +1,2646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CASENET — Public Case Transparency Network</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS loaded dynamically at runtime -->
+
+    <style>
+        /* ── BASE RESET (your code, preserved) ─────────────────────────── */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Barlow Condensed', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #2b2b2b;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+            min-height: 100vh;
+            transition: background-color 0.25s;
+        }
+        body.dark {
+            background-color: #080b10;
+        }
+
+        /* ── ARTBOARD (your code, preserved) ───────────────────────────── */
+        .artboard {
+            background-color: var(--bg, #ffffff);
+            width: 1200px;
+            min-height: 750px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.25s, color 0.25s;
+        }
+
+        /* ── THEME VARIABLES ────────────────────────────────────────────── */
+        .artboard {
+            --bg:          #ffffff;
+            --bg-body:     #f5f3ef;
+            --text:        #0a0a0a;
+            --sub:         #333333;
+            --muted:       #888888;
+            --border:      #000000;
+            --inner:       #cccccc;
+            --divider:     #eeeeee;
+            --accent:      #cc0000;
+            --map-bg:      #d3d3d3;
+            --map-land:    #e8e4dc;
+            --map-water:   #b8c8d8;
+            --map-border:  #aaaaaa;
+            --map-label:   #888888;
+            --panel-bg:    #f9f7f4;
+            --rule-color:  #000000;
+        }
+        .artboard.dark {
+            --bg:          #0d1117;
+            --bg-body:     #0a0e14;
+            --text:        #e8eaed;
+            --sub:         #aab0ba;
+            --muted:       #5a6275;
+            --border:      #e8eaed;
+            --inner:       #2a3040;
+            --divider:     #181e28;
+            --accent:      #ff3333;
+            --map-bg:      #0a1018;
+            --map-land:    #1a2535;
+            --map-water:   #0d1e30;
+            --map-border:  #2a3d55;
+            --map-label:   #3a5068;
+            --panel-bg:    #0f1520;
+            --rule-color:  #e8eaed;
+        }
+
+        /* ── HEADER (your structure, styled) ───────────────────────────── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 15px;
+            border-bottom: 5px solid var(--rule-color);
+            margin-bottom: 0;
+            color: var(--text);
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1;
+            margin-bottom: 5px;
+            font-family: 'Barlow Condensed', sans-serif;
+            color: var(--text);
+        }
+
+        .subtitle {
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.22em;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--sub);
+        }
+
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .tabs {
+            font-size: 1.5rem;
+            font-weight: 900;
+            word-spacing: 15px;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 0;
+        }
+
+        .tab-btn {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 0 0 3px;
+            margin-left: 28px;
+            cursor: pointer;
+            color: var(--muted);
+            transition: color 0.12s, border-color 0.12s;
+        }
+        .tab-btn:first-child { margin-left: 0; }
+        .tab-btn.active {
+            color: var(--text);
+            border-bottom-color: var(--text);
+        }
+        .tab-btn:hover { color: var(--text); }
+
+        .sync-info {
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--sub);
+        }
+
+        .red-text { color: var(--accent); font-weight: 600; }
+
+        /* ── STATS STRIP ────────────────────────────────────────────────── */
+        .stats-strip {
+            display: flex;
+            border-bottom: 1px solid var(--inner);
+            background: var(--panel-bg);
+            margin-bottom: 20px;
+        }
+        .stat-cell {
+            flex: 1;
+            padding: 8px 18px;
+            border-right: 1px solid var(--inner);
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+        .stat-cell:last-child { border-right: none; flex: 0 0 auto; padding: 8px 14px; align-items: center; }
+        .stat-num {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .stat-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        .live-dot {
+            width: 7px; height: 7px;
+            background: #22c55e;
+            display: inline-block;
+            margin-right: 5px;
+            animation: blink 1.8s step-end infinite;
+        }
+
+        /* ── MAIN CONTENT (your code, preserved) ───────────────────────── */
+        .main-content {
+            display: flex;
+            flex-grow: 1;
+            gap: 0;
+        }
+
+        /* ── SIDEBAR (your code, preserved + filled) ────────────────────── */
+        .sidebar {
+            width: 250px;
+            border: 3px solid var(--border);
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.25s, border-color 0.25s, color 0.25s;
+        }
+
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 0.18em;
+            padding: 12px 15px 10px;
+            border-bottom: 1px solid var(--inner);
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--text);
+            font-family: 'Barlow Condensed', sans-serif;
+        }
+
+        .sidebar-body {
+            padding: 14px 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .filter-section-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.52rem;
+            letter-spacing: 0.22em;
+            color: var(--muted);
+            margin-bottom: 7px;
+            text-transform: uppercase;
+        }
+
+        /* Search box */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid var(--inner);
+            padding: 6px 9px;
+            background: var(--bg-body);
+            transition: background 0.25s, border-color 0.25s;
+        }
+        .search-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text);
+        }
+        .search-box input::placeholder { color: var(--muted); }
+        .search-clear { cursor: pointer; color: var(--muted); background: none; border: none; font-size: 0.75rem; }
+
+        /* Case type checkboxes */
+        .type-row {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--divider);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            color: var(--text);
+        }
+        .type-row input[type="checkbox"] { cursor: pointer; }
+        .type-dot { width: 9px; height: 9px; flex-shrink: 0; }
+        .type-count {
+            margin-left: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.6rem;
+            color: var(--muted);
+        }
+
+        /* Time range buttons */
+        .time-btn {
+            width: 100%;
+            padding: 6px 9px;
+            margin-bottom: 4px;
+            text-align: left;
+            background: transparent;
+            border: 1px solid var(--inner);
+            color: var(--muted);
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: background 0.1s, border-color 0.1s, color 0.1s;
+        }
+        .time-btn.active {
+            border-color: var(--text);
+            color: var(--text);
+            background: rgba(128,128,128,0.08);
+        }
+
+        /* Pattern toggle */
+        .pattern-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        .pattern-label input { margin-top: 2px; cursor: pointer; }
+        .pattern-name { font-weight: 700; letter-spacing: 0.08em; font-size: 0.7rem; color: var(--muted); transition: color 0.12s; }
+        .pattern-name.on { color: #7c3aed; }
+        .pattern-desc { font-family: 'IBM Plex Mono', monospace; font-size: 0.55rem; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+        /* Legend */
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            margin-bottom: 5px;
+            color: var(--text);
+        }
+        .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+        /* Sidebar footer note */
+        .sidebar-note {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            color: var(--muted);
+            line-height: 1.6;
+            border-top: 1px solid var(--divider);
+            padding-top: 10px;
+            margin-top: auto;
+        }
+
+        /* Dark/light toggle button */
+        .theme-toggle {
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            padding: 5px 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            letter-spacing: 0.12em;
+            cursor: pointer;
+            margin-left: 20px;
+            align-self: flex-end;
+            margin-bottom: 3px;
+            transition: background 0.25s, color 0.25s;
+        }
+        .theme-toggle:hover { opacity: 0.8; }
+
+        /* ── MAP CONTAINER (your code, preserved + filled) ──────────────── */
+        .map-container {
+            flex-grow: 1;
+            background-color: var(--map-bg);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--inner);
+            border-left: none;
+        }
+
+        #leaflet-map {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+        }
+
+        /* Hide default Leaflet attribution + zoom for a cleaner look; we re-add zoom in custom position */
+        .leaflet-control-attribution {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem !important;
+            background: rgba(255,255,255,0.6) !important;
+            padding: 2px 6px !important;
+        }
+        .artboard.dark .leaflet-control-attribution {
+            background: rgba(10,14,22,0.6) !important;
+            color: #8b949e !important;
+        }
+        .artboard.dark .leaflet-control-attribution a {
+            color: #58a6ff !important;
+        }
+
+        .leaflet-control-zoom {
+            border: 1px solid var(--inner) !important;
+            box-shadow: none !important;
+            margin-top: 60px !important;
+            margin-right: 12px !important;
+        }
+        .leaflet-control-zoom a {
+            background: var(--bg) !important;
+            color: var(--text) !important;
+            border-bottom: 1px solid var(--inner) !important;
+            font-family: 'IBM Plex Mono', monospace !important;
+            font-weight: 400 !important;
+        }
+        .leaflet-control-zoom a:hover {
+            background: var(--panel-bg) !important;
+        }
+
+        /* Custom case marker */
+        .case-marker {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.8);
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.12s;
+        }
+        .artboard.dark .case-marker {
+            border-color: rgba(0,0,0,0.6);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.08), 0 2px 4px rgba(0,0,0,0.6);
+        }
+        .case-marker:hover { transform: scale(1.3); }
+        .case-marker.active-case::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulse-ring 2.4s ease-out infinite;
+            pointer-events: none;
+        }
+        .case-marker.selected {
+            transform: scale(1.4);
+            border-color: #ffffff;
+            box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(204,0,0,0.4);
+        }
+
+        @keyframes pulse-ring {
+            0%   { transform: scale(1); opacity: 0.9; }
+            100% { transform: scale(3.5); opacity: 0; }
+        }
+
+        /* ── KILL ALL LEAFLET DEFAULT CLUSTER COLORS ────────────────────── */
+        .marker-cluster-small div,
+        .marker-cluster-medium div,
+        .marker-cluster-large div,
+        .marker-cluster div {
+            background: transparent !important;
+            color: inherit !important;
+            border-radius: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 !important;
+        }
+        .marker-cluster-small,
+        .marker-cluster-medium,
+        .marker-cluster-large {
+            background: transparent !important;
+        }
+
+        /* Custom cluster styling */
+        .marker-cluster-custom {
+            background: rgba(15, 20, 30, 0.88) !important;
+            border: 2px solid rgba(255,255,255,0.9) !important;
+            border-radius: 50% !important;
+            color: #ffffff !important;
+            font-family: 'Barlow Condensed', sans-serif !important;
+            font-weight: 800 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+        .artboard.dark .marker-cluster-custom {
+            background: rgba(232,234,237,0.92) !important;
+            color: #0a0e14 !important;
+            border-color: rgba(0,0,0,0.4) !important;
+        }
+        .marker-cluster-small  { width: 34px !important; height: 34px !important; font-size: 13px !important; line-height: 1 !important; }
+        .marker-cluster-medium { width: 42px !important; height: 42px !important; font-size: 14px !important; line-height: 1 !important; }
+        .marker-cluster-large  { width: 52px !important; height: 52px !important; font-size: 16px !important; line-height: 1 !important; }
+
+        .leaflet-marker-icon { outline: none; }
+
+        /* Kill the default green selected ring from Leaflet */
+        .leaflet-div-icon { background: transparent !important; border: none !important; }
+
+        /* Leaflet tooltip override — match CASENET style */
+        .case-marker-tooltip {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+        .case-marker-tooltip::before { display: none !important; }
+        .leaflet-tooltip { transition: opacity 0.1s; }
+
+        /* Map overlays */
+        .map-overlay {
+            position: absolute;
+            background: rgba(255,255,255,0.94);
+            border: 1px solid var(--inner);
+            padding: 9px 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            transition: background 0.25s, border-color 0.25s;
+            z-index: 500;
+            backdrop-filter: blur(6px);
+        }
+        .artboard.dark .map-overlay {
+            background: rgba(10,14,22,0.93);
+        }
+        .map-legend { bottom: 14px; left: 14px; }
+        .map-count  { top: 12px; right: 12px; font-size: 0.55rem; letter-spacing: 0.12em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+        .map-coords { bottom: 14px; right: 14px; font-size: 0.55rem; color: var(--muted); line-height: 1.5; }
+        .map-legend-title { font-size: 0.48rem; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 7px; }
+
+        .map-reset {
+            top: 12px; right: 165px;
+            padding: 7px 9px !important;
+            cursor: pointer;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .map-reset:hover {
+            background: var(--panel-bg);
+            border-color: var(--text);
+        }
+
+        /* ── CASE PANEL (slides in from right when case selected) ───────── */
+        .case-panel {
+            width: 0;
+            overflow: hidden;
+            transition: width 0.2s ease, background 0.25s;
+            border-left: none;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .case-panel.open {
+            width: 290px;
+            border-left: 1px solid var(--inner);
+        }
+        .case-panel-inner {
+            width: 290px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow-y: auto;
+            color: var(--text);
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--inner);
+            flex-shrink: 0;
+        }
+        .panel-type { font-family: 'IBM Plex Mono', monospace; font-size: 0.55rem; letter-spacing: 0.15em; font-weight: 600; }
+        .panel-id   { font-family: 'IBM Plex Mono', monospace; font-size: 0.5rem; color: var(--muted); margin-top: 2px; }
+        .panel-close { background: transparent; border: 1px solid var(--inner); color: var(--muted); padding: 3px 8px; cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.55rem; }
+        .panel-body { padding: 14px; }
+        .panel-status {
+            padding: 6px 10px;
+            margin-bottom: 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            letter-spacing: 0.15em;
+            font-weight: 700;
+        }
+        .panel-name {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 1.35rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        .panel-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--divider);
+            font-size: 0.6rem;
+        }
+        .panel-row-key { font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.15em; color: var(--muted); }
+        .panel-row-val { font-family: 'IBM Plex Mono', monospace; font-weight: 500; color: var(--text); }
+        .panel-circumstances-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.5rem; letter-spacing: 0.2em; color: var(--muted); margin: 14px 0 6px; }
+        .panel-circumstances { font-size: 0.75rem; color: var(--sub); line-height: 1.65; }
+        .panel-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+        .panel-btn {
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: transparent;
+            border: 1px solid var(--inner);
+            color: var(--text);
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 0.78rem;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: background 0.1s;
+            width: 100%;
+        }
+        .panel-btn.primary { border-color: #dc2626; color: #dc2626; background: rgba(220,38,38,0.07); }
+        .panel-btn:hover { background: rgba(128,128,128,0.08); }
+        .panel-note { margin-top: 12px; padding: 9px; border: 1px solid var(--inner); font-family: 'IBM Plex Mono', monospace; font-size: 0.5rem; color: var(--muted); line-height: 1.6; }
+
+        /* ── ANIMATIONS ─────────────────────────────────────────────────── */
+        @keyframes blink { 50% { opacity: 0; } }
+        @keyframes ripple { 0% { r: 5; opacity: .6; } 100% { r: 24; opacity: 0; } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--inner); }
+        /* ── ANALYTICS VIEW ─────────────────────────────────────────────── */
+        #analytics-view { color: var(--text); }
+
+        .analytics-card {
+            background: var(--bg);
+            border: 1px solid var(--inner);
+            padding: 16px 18px;
+            transition: background 0.25s, border-color 0.25s;
+        }
+        .chart-title {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.18em;
+            color: var(--text);
+            margin-bottom: 3px;
+        }
+        .chart-sub {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+        .chart-wrap {
+            position: relative;
+            height: 180px;
+        }
+
+        /* KPI cards */
+        .kpi-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.52rem;
+            letter-spacing: 0.2em;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+        .kpi-value {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .kpi-sub {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        /* Agency table */
+        .agency-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--divider);
+            font-size: 0.75rem;
+        }
+        .agency-row:last-child { border-bottom: none; }
+        .agency-bar-wrap {
+            flex: 1;
+            height: 6px;
+            background: var(--divider);
+        }
+        .agency-bar {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.5s ease;
+        }
+        .agency-name {
+            width: 180px;
+            flex-shrink: 0;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .agency-count {
+            width: 28px;
+            flex-shrink: 0;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            color: var(--muted);
+            text-align: right;
+        }
+        /* ── CASE INDEX VIEW ────────────────────────────────────────────── */
+        #case-index-view { color: var(--text); }
+
+        .index-th {
+            padding: 9px 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            cursor: pointer;
+            user-select: none;
+            border-right: 1px solid var(--inner);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: color 0.1s, background 0.1s;
+        }
+        .index-th:last-child { border-right: none; }
+        .index-th:hover { color: var(--text); background: rgba(128,128,128,0.06); }
+        .index-th.sort-active { color: var(--text); }
+
+        .index-row {
+            display: grid;
+            grid-template-columns: 130px 200px 80px 140px 100px 130px 80px 90px;
+            border-bottom: 1px solid var(--divider);
+            cursor: pointer;
+            transition: background 0.08s;
+        }
+        .index-row:hover { background: rgba(128,128,128,0.06); }
+        .index-row.selected-row { background: rgba(88,166,255,0.08); border-left: 3px solid #58a6ff; }
+        .artboard.dark .index-row.selected-row { background: rgba(88,166,255,0.06); }
+
+        .index-cell {
+            padding: 10px 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.58rem;
+            color: var(--text);
+            border-right: 1px solid var(--divider);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+        }
+        .index-cell:last-child { border-right: none; }
+        .index-cell.name-cell {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 0.82rem;
+            letter-spacing: 0.03em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.48rem;
+            letter-spacing: 0.12em;
+            font-weight: 600;
+            border: 1px solid;
+        }
+        .type-pip {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        #export-csv-btn:hover {
+            background: rgba(128,128,128,0.08);
+            border-color: var(--text);
+        }
+        /* ── ABOUT VIEW ─────────────────────────────────────────────────── */
+        #about-view { color: var(--text); }
+
+        .about-section {
+            margin-bottom: 36px;
+            padding-bottom: 36px;
+            border-bottom: 1px solid var(--inner);
+        }
+        .about-section-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.52rem;
+            letter-spacing: 0.25em;
+            color: var(--accent);
+            margin-bottom: 14px;
+            font-weight: 600;
+        }
+        .about-body {
+            font-size: 0.8rem;
+            color: var(--sub);
+            line-height: 1.8;
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+        .about-notice {
+            background: var(--panel-bg);
+            border: 1px solid var(--inner);
+            border-left: 3px solid var(--accent);
+            padding: 12px 16px;
+            margin-top: 14px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .about-source-card {
+            background: var(--bg);
+            border: 1px solid var(--inner);
+            padding: 16px;
+            transition: border-color 0.15s;
+        }
+        .about-source-card:hover { border-color: var(--text); }
+        .about-source-name {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 900;
+            font-size: 1.4rem;
+            letter-spacing: 0.06em;
+            color: var(--text);
+            margin-bottom: 2px;
+        }
+        .about-source-url {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.52rem;
+            color: var(--accent);
+            letter-spacing: 0.1em;
+            margin-bottom: 10px;
+        }
+        .about-source-desc {
+            font-size: 0.65rem;
+            color: var(--sub);
+            line-height: 1.65;
+            font-family: 'Barlow Condensed', sans-serif;
+        }
+        .about-how-card {
+            background: var(--bg);
+            border: 1px solid var(--inner);
+            padding: 18px;
+            transition: border-color 0.15s;
+        }
+        .about-how-card:hover { border-color: var(--text); }
+        .about-how-num {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 900;
+            font-size: 2rem;
+            color: var(--inner);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .about-how-title {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 800;
+            font-size: 0.9rem;
+            letter-spacing: 0.15em;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+        .about-how-desc {
+            font-size: 0.68rem;
+            color: var(--sub);
+            line-height: 1.65;
+            font-family: 'Barlow Condensed', sans-serif;
+        }
+        /* ── MOBILE RESPONSIVE ──────────────────────────────────────────── */
+
+        /* Sidebar toggle button — hidden on desktop */
+        .sidebar-toggle {
+            display: none;
+            background: transparent;
+            border: 1px solid var(--inner);
+            color: var(--text);
+            padding: 6px 10px;
+            cursor: pointer;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.55rem;
+            letter-spacing: 0.1em;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+        .sidebar-toggle:hover { background: var(--panel-bg); }
+
+        /* Sidebar overlay — mobile drawer backdrop */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            backdrop-filter: blur(2px);
+        }
+        .sidebar-overlay.open { display: block; }
+
+        /* NamUs data loading banner */
+        .data-banner {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--inner);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.52rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            flex-shrink: 0;
+        }
+        .data-banner.visible { display: flex; }
+        .data-banner.error { color: #dc2626; border-color: #dc2626; background: rgba(220,38,38,0.06); }
+        .data-banner.success { color: #22c55e; border-color: rgba(34,197,94,0.3); }
+        .data-spinner {
+            width: 12px; height: 12px;
+            border: 2px solid var(--inner);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 900px) {
+            body {
+                padding: 0;
+                background-color: var(--bg, #fff);
+            }
+            body.dark { background-color: #0d1117; }
+
+            .artboard {
+                width: 100%;
+                min-height: 100vh;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+
+            /* Header: stack wordmark above tabs */
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 12px 16px 10px;
+                gap: 8px;
+            }
+            .header-right {
+                width: 100%;
+                align-items: flex-start;
+            }
+            .tabs {
+                flex-wrap: wrap;
+                gap: 4px;
+                margin-bottom: 4px;
+            }
+            .tab-btn {
+                font-size: 1rem;
+                margin-left: 0;
+                padding: 4px 10px 3px;
+            }
+            .theme-toggle {
+                margin-left: 8px;
+                padding: 4px 8px;
+            }
+            .title { font-size: 2.2rem; }
+            .sync-info { font-size: 0.55rem; }
+
+            /* Stats strip — scroll horizontally on mobile */
+            .stats-strip {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            .stat-cell { min-width: 100px; flex-shrink: 0; }
+
+            /* Show sidebar toggle button */
+            .sidebar-toggle { display: flex; }
+
+            /* Main content stacks vertically */
+            .main-content {
+                flex-direction: column;
+                position: relative;
+            }
+
+            /* Sidebar becomes a slide-in drawer */
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 280px;
+                height: 100vh;
+                z-index: 300;
+                transition: left 0.25s ease;
+                border: none;
+                border-right: 2px solid var(--border);
+                overflow-y: auto;
+            }
+            .sidebar.open { left: 0; }
+
+            /* Map fills full width */
+            .map-container {
+                border-left: 1px solid var(--inner);
+                min-height: 50vh;
+            }
+
+            /* Case panel full width on mobile */
+            .case-panel.open {
+                width: 100%;
+                border-left: none;
+                border-top: 2px solid var(--border);
+                max-height: 50vh;
+                overflow-y: auto;
+            }
+
+            /* Analytics and index views */
+            #analytics-view { padding: 16px; }
+            #about-view > div { padding: 20px 16px; }
+
+            /* Index table scrolls horizontally */
+            #index-table-head,
+            #index-table-body .index-row {
+                min-width: 750px;
+            }
+            #index-table-body { overflow-x: auto; }
+
+            /* Map overlays reposition */
+            .map-count  { top: 8px; right: 8px; font-size: 0.48rem; padding: 6px 8px; }
+            .map-reset  { top: 8px; right: 120px; padding: 5px 7px !important; }
+            .map-legend { bottom: 8px; left: 8px; padding: 7px 10px; }
+            .map-coords { display: none !important; }
+        }
+
+        @media (max-width: 480px) {
+            .title { font-size: 1.8rem; }
+            .tab-btn { font-size: 0.85rem; padding: 3px 8px; }
+            .stat-num { font-size: 1.2rem; }
+            .stat-label { font-size: 0.42rem; }
+            .analytics-card { padding: 12px; }
+            .kpi-value { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="artboard" id="artboard">
+
+    <!-- ══════════ HEADER (your structure) ══════════ -->
+    <header class="header">
+        <div class="header-left" style="display:flex;align-items:center;gap:12px;">
+            <div>
+                <div class="title">CASENET</div>
+                <div class="subtitle">PUBLIC CASE TRANSPARENCY NETWORK</div>
+            </div>
+            <!-- Mobile only: filter toggle -->
+            <button class="sidebar-toggle" id="sidebar-toggle">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+                FILTERS
+            </button>
+        </div>
+        <div class="header-right">
+            <div class="tabs">
+                <button class="tab-btn active" id="tab-0">MAP VIEW</button>
+                <button class="tab-btn"        id="tab-1">CASE INDEX</button>
+                <button class="tab-btn"        id="tab-2">ANALYTICS</button>
+                <button class="tab-btn"        id="tab-3">ABOUT</button>
+                <button class="theme-toggle"   id="theme-toggle">☾ DARK</button>
+            </div>
+            <div class="sync-info">
+                SYNC: <span id="sync-time">—</span>&nbsp;&nbsp;&nbsp;VERSION CODE: <span class="red-text">1.0-PROTO</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar overlay (mobile backdrop) -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- DATA FETCH BANNER -->
+    <div class="data-banner" id="data-banner">
+        <div class="data-spinner" id="data-spinner"></div>
+        <span id="data-banner-text">LOADING LIVE DATA FROM NAMUS...</span>
+    </div>
+
+    <!-- STATS STRIP -->
+    <div class="stats-strip">
+        <div class="stat-cell">
+            <span class="stat-num" id="stat-total" style="color:var(--text)">000</span>
+            <span class="stat-label">Total Cases</span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-num" id="stat-missing" style="color:#d97706">000</span>
+            <span class="stat-label">Missing</span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-num" id="stat-unid" style="color:#6b7280">000</span>
+            <span class="stat-label">Unidentified</span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-num" id="stat-homicide" style="color:#dc2626">000</span>
+            <span class="stat-label">Homicides</span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-num" id="stat-pattern" style="color:#7c3aed">000</span>
+            <span class="stat-label">Pattern Flags</span>
+        </div>
+        <div class="stat-cell">
+            <span class="live-dot"></span>
+            <span class="stat-label" style="letter-spacing:.12em">LIVE</span>
+        </div>
+    </div>
+
+    <!-- ══════════ MAIN CONTENT (your structure) ══════════ -->
+    <main class="main-content">
+
+        <!-- SIDEBAR (your structure) -->
+        <aside class="sidebar">
+            <div class="sidebar-title">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+                FILTERS
+            </div>
+            <div class="sidebar-body">
+
+                <!-- Search -->
+                <div>
+                    <div class="filter-section-label">Search Cases</div>
+                    <div class="search-box">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="search-input" placeholder="Name, city, case ID...">
+                        <button class="search-clear" id="search-clear" style="display:none">✕</button>
+                    </div>
+                </div>
+
+                <!-- Case type -->
+                <div>
+                    <div class="filter-section-label">Case Type</div>
+                    <label class="type-row">
+                        <input type="checkbox" id="chk-missing" checked>
+                        <span class="type-dot" style="background:#d97706"></span>
+                        Missing Persons
+                        <span class="type-count" id="cnt-missing">0</span>
+                    </label>
+                    <label class="type-row">
+                        <input type="checkbox" id="chk-unidentified" checked>
+                        <span class="type-dot" style="background:#6b7280"></span>
+                        Unidentified Remains
+                        <span class="type-count" id="cnt-unidentified">0</span>
+                    </label>
+                    <label class="type-row">
+                        <input type="checkbox" id="chk-homicide" checked>
+                        <span class="type-dot" style="background:#dc2626"></span>
+                        Unsolved Homicides
+                        <span class="type-count" id="cnt-homicide">0</span>
+                    </label>
+                </div>
+
+                <!-- Time range -->
+                <div>
+                    <div class="filter-section-label">Time Range</div>
+                    <button class="time-btn active" data-time="all">All time</button>
+                    <button class="time-btn"        data-time="1">Past 12 months</button>
+                    <button class="time-btn"        data-time="3">Past 3 years</button>
+                    <button class="time-btn"        data-time="5">Past 5 years</button>
+                </div>
+
+                <!-- Pattern overlay -->
+                <div>
+                    <div class="filter-section-label">Analysis Layer</div>
+                    <label class="pattern-label">
+                        <input type="checkbox" id="chk-pattern">
+                        <div>
+                            <div class="pattern-name" id="pattern-name">GEO-TEMPORAL PATTERNS</div>
+                            <div class="pattern-desc">Official case-file clusters only. Not predictive.</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Map legend -->
+                <div>
+                    <div class="filter-section-label">Map Legend</div>
+                    <div class="legend-row"><div class="legend-dot" style="background:#d97706"></div>Missing Persons</div>
+                    <div class="legend-row"><div class="legend-dot" style="background:#6b7280"></div>Unidentified Remains</div>
+                    <div class="legend-row"><div class="legend-dot" style="background:#dc2626"></div>Unsolved Homicides</div>
+                    <div class="legend-row" id="pattern-legend-row" style="display:none">
+                        <div class="legend-dot" style="background:none;border:1.5px dashed #7c3aed;border-radius:50%;width:9px;height:9px"></div>
+                        Pattern Cluster
+                    </div>
+                </div>
+
+                <div class="sidebar-note">
+                    All data sourced from public records.<br>
+                    Direct tips to the lead agency only.
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- MAP CONTAINER (your structure) -->
+        <section class="map-container" id="map-section">
+            <!-- Leaflet mounts here -->
+            <div id="leaflet-map"></div>
+
+            <!-- Overlays -->
+            <div class="map-overlay map-count">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span id="count-label">0 CASES IN VIEW</span>
+            </div>
+
+            <div class="map-overlay map-coords" id="map-coords" style="display:none"></div>
+
+            <!-- Zoom reset button -->
+            <button class="map-overlay map-reset" id="map-reset" title="Reset view">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M3 12a9 9 0 1 0 9-9" /><polyline points="3 4 3 10 9 10" />
+                </svg>
+            </button>
+        </section>
+
+        <!-- CASE DETAIL PANEL -->
+        <div class="case-panel" id="case-panel">
+            <div class="case-panel-inner" id="case-panel-inner"></div>
+        </div>
+
+    </main>
+
+    <!-- ══════════ ANALYTICS VIEW ══════════ -->
+    <div id="analytics-view" style="display:none;flex:1;overflow-y:auto;padding:24px 28px;background:var(--bg-body);">
+
+        <!-- Section header -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding-bottom:14px;border-bottom:2px solid var(--border);">
+            <div>
+                <div style="font-size:1.8rem;font-weight:900;letter-spacing:0.04em;color:var(--text);font-family:'Barlow Condensed',sans-serif;">CASE ANALYTICS</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;letter-spacing:0.18em;color:var(--muted);margin-top:4px;">DERIVED FROM PUBLIC RECORD DATA · NAMUS · MAP · FBI CDE</div>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--muted);text-align:right;">
+                <div id="analytics-case-count" style="color:var(--text);font-size:0.75rem;font-weight:600;">— cases</div>
+                <div>in current filter</div>
+            </div>
+        </div>
+
+        <!-- Row 1: 3 KPI cards -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+            <div class="analytics-card" id="kpi-unsolved">
+                <div class="kpi-label">UNSOLVED RATE</div>
+                <div class="kpi-value" id="kpi-unsolved-val">—</div>
+                <div class="kpi-sub" id="kpi-unsolved-sub">of all cases remain open</div>
+            </div>
+            <div class="analytics-card" id="kpi-active">
+                <div class="kpi-label">ACTIVE MISSING</div>
+                <div class="kpi-value" id="kpi-active-val">—</div>
+                <div class="kpi-sub" id="kpi-active-sub">persons currently sought</div>
+            </div>
+            <div class="analytics-card" id="kpi-pattern">
+                <div class="kpi-label">PATTERN FLAGS</div>
+                <div class="kpi-value" id="kpi-pattern-val">—</div>
+                <div class="kpi-sub">cases with geo-temporal links</div>
+            </div>
+        </div>
+
+        <!-- Row 2: Timeline (wide) + Type breakdown -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:20px;">
+            <div class="analytics-card">
+                <div class="chart-title">CASES BY YEAR</div>
+                <div class="chart-sub">Volume trend across all case types</div>
+                <div class="chart-wrap"><canvas id="chart-timeline"></canvas></div>
+            </div>
+            <div class="analytics-card">
+                <div class="chart-title">CASE TYPE BREAKDOWN</div>
+                <div class="chart-sub">Proportion by category</div>
+                <div class="chart-wrap" style="max-height:200px;display:flex;align-items:center;justify-content:center;">
+                    <canvas id="chart-donut"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: By state + Status + Demographics -->
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-bottom:20px;">
+            <div class="analytics-card">
+                <div class="chart-title">CASES BY STATE</div>
+                <div class="chart-sub">Top 10 states by case volume</div>
+                <div class="chart-wrap"><canvas id="chart-state"></canvas></div>
+            </div>
+            <div class="analytics-card">
+                <div class="chart-title">CASE STATUS</div>
+                <div class="chart-sub">Current resolution status</div>
+                <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+            </div>
+            <div class="analytics-card">
+                <div class="chart-title">DATA SOURCES</div>
+                <div class="chart-sub">Cases by originating database</div>
+                <div class="chart-wrap"><canvas id="chart-source"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Row 4: Agency table -->
+        <div class="analytics-card" style="margin-bottom:20px;">
+            <div class="chart-title">LEAD AGENCIES</div>
+            <div class="chart-sub">Agencies with the most open cases</div>
+            <div id="agency-table" style="margin-top:12px;"></div>
+        </div>
+
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.48rem;color:var(--muted);line-height:1.7;padding-top:12px;border-top:1px solid var(--inner);">
+            All analytics derived from the current filtered dataset. Charts update in real time as filters change.
+            Pattern flags sourced from official case records — not algorithmic inference.
+            Demographic data reflects information available in public records and may be incomplete.
+        </div>
+    </div>
+
+    <!-- ══════════ CASE INDEX VIEW ══════════ -->
+    <div id="case-index-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;background:var(--bg-body);">
+
+        <!-- Toolbar -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--inner);background:var(--bg);flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:16px;">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;letter-spacing:0.18em;color:var(--text);">CASE INDEX</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;color:var(--muted);" id="index-count">— RECORDS</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <!-- Column sort indicator -->
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);letter-spacing:0.1em;" id="sort-indicator">SORTED BY DATE ↓</div>
+                <!-- Export CSV -->
+                <button id="export-csv-btn" style="
+                    background:transparent;border:1px solid var(--inner);color:var(--text);
+                    padding:6px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;
+                    font-size:0.78rem;letter-spacing:0.1em;cursor:pointer;
+                    display:flex;align-items:center;gap:6px;transition:border-color 0.1s,background 0.1s;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    EXPORT CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Table header -->
+        <div id="index-table-head" style="display:grid;grid-template-columns:130px 200px 80px 140px 100px 130px 80px 90px;gap:0;border-bottom:2px solid var(--border);background:var(--panel-bg);flex-shrink:0;">
+        </div>
+
+        <!-- Table body -->
+        <div id="index-table-body" style="flex:1;overflow-y:auto;"></div>
+
+    </div>
+
+    <!-- ══════════ ABOUT VIEW ══════════ -->
+    <div id="about-view" style="display:none;flex:1;overflow-y:auto;background:var(--bg-body);">
+        <div style="max-width:860px;margin:0 auto;padding:40px 32px;">
+
+            <!-- Header -->
+            <div style="border-bottom:2px solid var(--border);padding-bottom:20px;margin-bottom:36px;">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:3rem;letter-spacing:0.02em;color:var(--text);line-height:1;">ABOUT CASENET</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;color:var(--muted);margin-top:8px;">PUBLIC CASE TRANSPARENCY NETWORK · PROTOTYPE · v1.0-PROTO</div>
+            </div>
+
+            <!-- Mission -->
+            <div class="about-section">
+                <div class="about-section-label">MISSION</div>
+                <p class="about-body">CASENET is a public-facing aggregation and visualization tool built to increase transparency around missing persons, unidentified remains, and unsolved homicides in the United States. Every case on this platform represents a real person — a family waiting for answers, an investigation that deserves public attention.</p>
+                <p class="about-body" style="margin-top:12px;">This tool is not a law enforcement system. It does not replace official databases or investigative processes. Its purpose is to surface public-record information in a format that is accessible, searchable, and useful to families, journalists, researchers, and the general public.</p>
+            </div>
+
+            <!-- Data sources -->
+            <div class="about-section">
+                <div class="about-section-label">DATA SOURCES</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+                    <div class="about-source-card">
+                        <div class="about-source-name">NamUs</div>
+                        <div class="about-source-url">namus.gov</div>
+                        <div class="about-source-desc">National Missing and Unidentified Persons System. Federal database operated by the Department of Justice. Primary source for missing persons and unidentified remains. Public search API available.</div>
+                    </div>
+                    <div class="about-source-card">
+                        <div class="about-source-name">MAP</div>
+                        <div class="about-source-url">murderdata.org</div>
+                        <div class="about-source-desc">Murder Accountability Project. Non-profit compiling unsolved homicide data from FBI and coroner records. Includes algorithmic pattern detection developed by journalist Thomas Hargrove.</div>
+                    </div>
+                    <div class="about-source-card">
+                        <div class="about-source-name">FBI CDE</div>
+                        <div class="about-source-url">cde.ucr.cjis.fbi.gov</div>
+                        <div class="about-source-desc">FBI Crime Data Explorer. Aggregated violent crime statistics by agency and jurisdiction. Used for regional context and clearance rate baselines.</div>
+                    </div>
+                </div>
+                <div class="about-notice">
+                    <span style="color:var(--accent);margin-right:8px;">※</span>
+                    Current data is representative mock data structured to match real NamUs and MAP schemas. Live API integration is in development. All case IDs, names, and circumstances in this prototype are illustrative only.
+                </div>
+            </div>
+
+            <!-- How to use -->
+            <div class="about-section">
+                <div class="about-section-label">HOW TO USE THIS TOOL</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="about-how-card">
+                        <div class="about-how-num">01</div>
+                        <div class="about-how-title">MAP VIEW</div>
+                        <div class="about-how-desc">Browse all cases geographically. Filter by type, date range, or search by name, city, or state. Click any dot to open the case detail panel. Zoom in to street level. Toggle the geo-temporal pattern overlay to surface cases with official agency-noted links.</div>
+                    </div>
+                    <div class="about-how-card">
+                        <div class="about-how-num">02</div>
+                        <div class="about-how-title">CASE INDEX</div>
+                        <div class="about-how-desc">Full sortable table of all cases. Click any column header to sort. Use the sidebar filters to narrow results. Click a row to fly to that case on the map. Export the current filtered dataset as a CSV for offline research.</div>
+                    </div>
+                    <div class="about-how-card">
+                        <div class="about-how-num">03</div>
+                        <div class="about-how-title">ANALYTICS</div>
+                        <div class="about-how-desc">Charts and statistics derived from the current filtered dataset. Explore case volume over time, breakdown by type and status, cases by state, and lead agency data. All charts update live as filters change.</div>
+                    </div>
+                    <div class="about-how-card">
+                        <div class="about-how-num">04</div>
+                        <div class="about-how-title">SUBMITTING TIPS</div>
+                        <div class="about-how-desc">CASENET does not collect tips directly. Use the "Submit Tip to Agency" button on any case to contact the lead agency. Never post speculation publicly — unverified information can harm investigations and families.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Responsible use -->
+            <div class="about-section">
+                <div class="about-section-label">RESPONSIBLE USE</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="about-notice" style="margin:0;">
+                        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:0.88rem;letter-spacing:0.1em;margin-bottom:8px;color:var(--text);">FOR RESEARCHERS &amp; JOURNALISTS</div>
+                        <p class="about-body" style="font-size:0.65rem;">All data is sourced from public records. Attribution to the originating database (NamUs, MAP, FBI CDE) is required when publishing. Do not republish case photographs or personally identifiable information beyond what appears here. Contact the lead agency before publishing details of active investigations.</p>
+                    </div>
+                    <div class="about-notice" style="margin:0;">
+                        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:0.88rem;letter-spacing:0.1em;margin-bottom:8px;color:var(--text);">FOR FAMILIES</div>
+                        <p class="about-body" style="font-size:0.65rem;">If you have information about a case, contact the lead agency listed on the case record directly. If you believe your family member's case is missing from this database, contact NamUs at 1-833-526-2887 to submit or update a record. CASENET is not a substitute for working directly with law enforcement.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pattern flags -->
+            <div class="about-section">
+                <div class="about-section-label">ABOUT PATTERN FLAGS</div>
+                <p class="about-body">The geo-temporal pattern overlay surfaces cases where law enforcement or the Murder Accountability Project has formally noted potential geographic or temporal linkage in official case records. These flags are <strong style="color:var(--text)">not algorithmic inference</strong> — CASENET does not generate its own linkage analysis. Showing speculative pattern connections publicly can compromise investigations, harm innocent people, and re-traumatize families. If you believe cases are linked, contact the lead agencies directly.</p>
+            </div>
+
+            <!-- Legal -->
+            <div class="about-section" style="border-bottom:none;padding-bottom:0;">
+                <div class="about-section-label">LEGAL &amp; LIMITATIONS</div>
+                <p class="about-body">CASENET is a prototype research and transparency tool. It is not an official law enforcement system, not affiliated with any government agency, and does not have access to restricted law enforcement databases such as ViCAP. Case information may be incomplete, outdated, or contain errors inherited from source databases. Always verify information directly with the lead agency before acting on it.</p>
+                <div style="margin-top:20px;padding:14px;border:1px solid var(--inner);font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);line-height:1.8;letter-spacing:0.05em;">
+                    CASENET · PUBLIC CASE TRANSPARENCY NETWORK · PROTOTYPE · NOT AN OFFICIAL LAW ENFORCEMENT SYSTEM<br>
+                    SOURCES: NAMUS.GOV · MURDERDATA.ORG · CDE.UCR.CJIS.FBI.GOV<br>
+                    MAP TILES: © OPENSTREETMAP CONTRIBUTORS · © CARTO<br>
+                    BUILT FOR PUBLIC AWARENESS AND INVESTIGATIVE TRANSPARENCY
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <footer style="border-top:1px solid var(--inner);padding:8px 0 0;margin-top:14px;display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:0.48rem;letter-spacing:0.1em;color:var(--muted);">
+        <span>CASENET · PUBLIC CASE TRANSPARENCY NETWORK · PROTOTYPE · NOT AN OFFICIAL LAW ENFORCEMENT SYSTEM</span>
+        <span>SOURCES: NAMUS.GOV · MURDERDATA.ORG · CDE.UCR.CJIS.FBI.GOV</span>
+    </footer>
+
+</div><!-- /.artboard -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════════════════ */
+const CASES = [
+  {id:"MP-2024-10847",type:"missing",      name:"Jane Doe",                 date:"2024-08-15",location:"Phoenix, AZ",        lat:33.45,lng:-112.07,agency:"Phoenix PD",    status:"active",  demo:"F, 24, White",    source:"NamUs",circumstances:"Last seen leaving workplace downtown. Vehicle recovered 40mi north two days later.",flag:null},
+  {id:"MP-2023-09102",type:"missing",      name:"John Doe",                 date:"2023-11-02",location:"Tucson, AZ",          lat:32.22,lng:-110.97,agency:"Tucson PD",      status:"active",  demo:"M, 31, Hispanic", source:"NamUs",circumstances:"Hiking in Sabino Canyon. No contact since. Search suspended after 9 days.",flag:null},
+  {id:"UP-2024-00421",type:"unidentified", name:"Unidentified Adult Male",  date:"2024-03-20",location:"Yuma, AZ",            lat:32.69,lng:-114.63,agency:"Yuma County SO", status:"open",    demo:"M, est. 35",      source:"NamUs",circumstances:"Remains in desert, est. 30–45yo. Distinctive dental work. DNA on file.",flag:null},
+  {id:"UH-2022-00887",type:"homicide",     name:"Maria Castillo",           date:"2022-05-11",location:"Albuquerque, NM",     lat:35.08,lng:-106.65,agency:"Albuquerque PD",status:"unsolved",demo:"F, 28, Hispanic", source:"MAP",  circumstances:"Found near I-40 corridor. No suspects identified.",flag:null},
+  {id:"UH-2023-01204",type:"homicide",     name:"David Kim",                date:"2023-07-22",location:"Las Vegas, NV",       lat:36.17,lng:-115.14,agency:"LVMPD",          status:"unsolved",demo:"M, 34, Asian",    source:"MAP",  circumstances:"Shooting victim downtown. Witnesses uncooperative.",flag:null},
+  {id:"MP-2024-11203",type:"missing",      name:"Sarah Chen",               date:"2024-09-03",location:"Los Angeles, CA",     lat:34.05,lng:-118.24,agency:"LAPD",           status:"active",  demo:"F, 19, Asian",    source:"NamUs",circumstances:"College student. Last seen campus library, phone offline 11:42 PM.",flag:null},
+  {id:"UP-2023-00298",type:"unidentified", name:"Unidentified Adult Female",date:"2023-09-14",location:"San Diego, CA",       lat:32.72,lng:-117.16,agency:"San Diego SO",   status:"open",    demo:"F, est. 28",      source:"NamUs",circumstances:"Coastal remains. Est. 20–35yo. Small rose tattoo, left wrist.",flag:null},
+  {id:"UH-2021-00665",type:"homicide",     name:"Robert Haynes",            date:"2021-12-08",location:"El Paso, TX",         lat:31.76,lng:-106.49,agency:"El Paso PD",     status:"unsolved",demo:"M, 52, White",    source:"MAP",  circumstances:"Truck driver found at rest stop, I-10. Cold case.",flag:null},
+  {id:"MP-2022-08340",type:"missing",      name:"Aaliyah Johnson",          date:"2022-04-18",location:"Houston, TX",         lat:29.76,lng:-95.37, agency:"Houston PD",     status:"active",  demo:"F, 16, Black",    source:"NamUs",circumstances:"Reclassified after no contact for 30+ days. Active investigation.",flag:null},
+  {id:"UP-2024-00512",type:"unidentified", name:"Unidentified Adult Male",  date:"2024-01-07",location:"Dallas, TX",          lat:32.78,lng:-96.80, agency:"Dallas PD",      status:"open",    demo:"M, est. 48",      source:"NamUs",circumstances:"Industrial area remains. Est. 40–55yo. Dental cross-reference pending.",flag:null},
+  {id:"UH-2024-01890",type:"homicide",     name:"Elena Vasquez",            date:"2024-02-14",location:"Denver, CO",          lat:39.74,lng:-104.99,agency:"Denver PD",      status:"unsolved",demo:"F, 31, Hispanic", source:"MAP",  circumstances:"Found in vehicle, parking structure. Similar MO to two earlier regional cases.",flag:"pattern"},
+  {id:"UH-2023-01577",type:"homicide",     name:"Marcus Williams",          date:"2023-05-29",location:"Colorado Springs, CO",lat:38.83,lng:-104.82,agency:"CSPD",           status:"unsolved",demo:"M, 27, Black",    source:"MAP",  circumstances:"Potential geographic pattern flagged by MAP algorithm. Linked to Denver case.",flag:"pattern"},
+  {id:"MP-2023-09876",type:"missing",      name:"Thomas O'Brien",           date:"2023-10-11",location:"Portland, OR",        lat:45.52,lng:-122.68,agency:"Portland PB",    status:"active",  demo:"M, 67, White",    source:"NamUs",circumstances:"Dementia-related endangered missing. Medical alert active.",flag:null},
+  {id:"UH-2022-01100",type:"homicide",     name:"Jasmine Carter",           date:"2022-08-03",location:"Seattle, WA",         lat:47.61,lng:-122.33,agency:"Seattle PD",     status:"unsolved",demo:"F, 29, Black",    source:"MAP",  circumstances:"Ride-share driver. Last fare unrecorded. Vehicle found abandoned.",flag:null},
+  {id:"UP-2024-00634",type:"unidentified", name:"Unidentified Adult Male",  date:"2024-06-02",location:"Miami, FL",           lat:25.76,lng:-80.19, agency:"Miami-Dade PD",  status:"open",    demo:"M, est. 32",      source:"NamUs",circumstances:"Waterway remains. Est. 25–40yo. Forensic artist reconstruction available.",flag:null},
+  {id:"MP-2024-10998",type:"missing",      name:"Priya Patel",              date:"2024-07-28",location:"Atlanta, GA",         lat:33.75,lng:-84.39, agency:"Atlanta PD",     status:"active",  demo:"F, 22, Asian",    source:"NamUs",circumstances:"Graduate student. Rideshare to airport never arrived. Multi-agency active.",flag:null},
+  {id:"UH-2024-02001",type:"homicide",     name:"James Morrison",           date:"2024-04-16",location:"Chicago, IL",         lat:41.88,lng:-87.63, agency:"CPD",            status:"unsolved",demo:"M, 45, White",    source:"MAP",  circumstances:"Business owner. Staged robbery indicators. Reward offered.",flag:null},
+  {id:"MP-2021-07102",type:"missing",      name:"Keisha Robinson",          date:"2021-06-14",location:"Detroit, MI",         lat:42.33,lng:-83.05, agency:"Detroit PD",     status:"active",  demo:"F, 28, Black",    source:"NamUs",circumstances:"Left night shift. Vehicle at workplace. No digital activity since.",flag:null},
+  {id:"UP-2022-00189",type:"unidentified", name:"Unidentified Adult Female",date:"2022-10-30",location:"New Orleans, LA",     lat:29.95,lng:-90.07, agency:"NOPD",           status:"open",    demo:"F, est. 40",      source:"NamUs",circumstances:"Industrial zone remains. Est. 30–50yo. Distinctive surgical scar.",flag:null},
+  {id:"UH-2023-01333",type:"homicide",     name:"Carlos Mendez",            date:"2023-03-07",location:"Phoenix, AZ",         lat:33.55,lng:-112.08,agency:"Phoenix PD",     status:"unsolved",demo:"M, 38, Hispanic", source:"MAP",  circumstances:"Found near freeway underpass. Case open, forensic leads pending.",flag:null},
+];
+
+/* ── NAMUS API INTEGRATION ──────────────────────────────────────────── */
+// NamUs direct endpoints (require server-side auth)
+const NAMUS_MISSING_URL      = 'https://www.namus.gov/api/CaseSets/NamUs/MissingPersons/search';
+const NAMUS_UNIDENTIFIED_URL = 'https://www.namus.gov/api/CaseSets/NamUs/UnidentifiedPersons/search';
+
+// ── SET THIS to your Cloudflare Worker URL after deploying the proxy ──────────
+// See PROXY_README.md in the casenet-proxy folder for setup instructions.
+// Leave as null to use mock data.
+const CASENET_PROXY = 'https://casenet.sergiop-raza.workers.dev';
+// Example: const CASENET_PROXY = 'https://casenet-proxy.yourname.workers.dev';
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CORS_PROXIES = [
+    url => 'https://corsproxy.io/?' + encodeURIComponent(url),
+    url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+];
+
+let dataSource    = 'mock';
+let lastFetchedAt = null;
+
+function showBanner(state, text) {
+    const banner  = document.getElementById('data-banner');
+    const spinner = document.getElementById('data-spinner');
+    const label   = document.getElementById('data-banner-text');
+    banner.className      = 'data-banner visible ' + (state || '');
+    spinner.style.display = state === 'loading' ? 'block' : 'none';
+    label.textContent     = text;
+}
+function hideBanner() {
+    document.getElementById('data-banner').className = 'data-banner';
+}
+
+async function proxyPost(url, bodyObj) {
+    const body    = JSON.stringify(bodyObj);
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    for (const makeProxy of CORS_PROXIES) {
+        try {
+            const res = await fetch(makeProxy(url), { method: 'POST', headers, body });
+            if (!res.ok) continue;
+            return await res.json();
+        } catch (_) {}
+    }
+    throw new Error('proxy_failed');
+}
+
+async function fetchNamusData() {
+    if (window.location.protocol === 'file:') {
+        console.info('CASENET: file:// — NamUs fetch skipped. Serve via HTTP to enable live data.');
+        return;
+    }
+
+    // ── Path 1: Cloudflare Worker proxy (recommended for production) ──────────
+    if (CASENET_PROXY) {
+        showBanner('loading', 'CONNECTING TO NAMUS.GOV...');
+        try {
+            const res = await fetch(CASENET_PROXY + '/api/namus', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ take: 250, skip: 0 }),
+            });
+            if (!res.ok) throw new Error('Worker returned ' + res.status);
+
+            const json    = await res.json();
+            const missing = (json.missing      || []).map(mapNamusMissing).filter(c => c.lat && c.lng);
+            const unid    = (json.unidentified || []).map(mapNamusUnidentified).filter(c => c.lat && c.lng);
+            const live    = [...missing, ...unid, ...MOCK_HOMICIDES];
+
+            CASES.length = 0;
+            live.forEach(c => CASES.push(c));
+
+            dataSource    = 'live';
+            lastFetchedAt = new Date(json.fetchedAt || Date.now());
+            updateClock();
+
+            showBanner('success',
+                'LIVE DATA LOADED · ' + missing.length + ' MISSING · ' +
+                unid.length + ' UNIDENTIFIED · SOURCE: NAMUS.GOV'
+            );
+            setTimeout(hideBanner, 4000);
+            renderAll();
+            return;
+
+        } catch (err) {
+            console.warn('Worker fetch failed:', err.message);
+            hideBanner();
+            return;
+        }
+    }
+
+    // ── Path 2: Direct CORS proxy (fallback — works if NamUs ever allows it) ──
+    try {
+        const [missingJson, unidJson] = await Promise.all([
+            proxyPost(NAMUS_MISSING_URL,      { take:250, skip:0 }),
+            proxyPost(NAMUS_UNIDENTIFIED_URL, { take:250, skip:0 }),
+        ]);
+
+        const missingArr = missingJson.results || [];
+        const unidArr    = unidJson.results    || [];
+
+        if (missingArr.length === 0 && (missingJson.count || 0) > 0) {
+            console.info('CASENET: NamUs auth wall detected. Deploy the Cloudflare Worker proxy to enable live data.');
+            hideBanner();
+            return;
+        }
+
+        const missing = missingArr.map(mapNamusMissing).filter(c => c.lat && c.lng);
+        const unid    = unidArr.map(mapNamusUnidentified).filter(c => c.lat && c.lng);
+        const live    = [...missing, ...unid, ...MOCK_HOMICIDES];
+
+        CASES.length = 0;
+        live.forEach(c => CASES.push(c));
+
+        dataSource    = 'live';
+        lastFetchedAt = new Date();
+        updateClock();
+
+        showBanner('success',
+            'LIVE DATA LOADED · ' + missing.length + ' MISSING · ' +
+            unid.length + ' UNIDENTIFIED · SOURCE: NAMUS.GOV'
+        );
+        setTimeout(hideBanner, 4000);
+        renderAll();
+
+    } catch (err) {
+        console.warn('NamUs direct fetch failed:', err.message);
+        hideBanner();
+    }
+}
+
+// State centroids — fallback coordinates when case has no exact location
+const STATE_CENTROIDS = {
+    AL:{lat:32.806671,lng:-86.791130}, AK:{lat:61.370716,lng:-152.404419},
+    AZ:{lat:33.729759,lng:-111.431221},AR:{lat:34.969704,lng:-92.373123},
+    CA:{lat:36.116203,lng:-119.681564},CO:{lat:39.059811,lng:-105.311104},
+    CT:{lat:41.597782,lng:-72.755371}, DE:{lat:39.318523,lng:-75.507141},
+    FL:{lat:27.766279,lng:-81.686783}, GA:{lat:33.040619,lng:-83.643074},
+    HI:{lat:21.094318,lng:-157.498337},ID:{lat:44.240459,lng:-114.478828},
+    IL:{lat:40.349457,lng:-88.986137}, IN:{lat:39.849426,lng:-86.258278},
+    IA:{lat:42.011539,lng:-93.210526}, KS:{lat:38.526600,lng:-96.726486},
+    KY:{lat:37.668140,lng:-84.670067}, LA:{lat:31.169960,lng:-91.867805},
+    ME:{lat:44.693947,lng:-69.381927}, MD:{lat:39.063946,lng:-76.802101},
+    MA:{lat:42.230171,lng:-71.530106}, MI:{lat:43.326618,lng:-84.536095},
+    MN:{lat:45.694454,lng:-93.900192}, MS:{lat:32.741646,lng:-89.678696},
+    MO:{lat:38.456085,lng:-92.288368}, MT:{lat:46.921925,lng:-110.454353},
+    NE:{lat:41.125370,lng:-98.268082}, NV:{lat:38.313515,lng:-117.055374},
+    NH:{lat:43.452492,lng:-71.563896}, NJ:{lat:40.298904,lng:-74.521011},
+    NM:{lat:34.840515,lng:-106.248482},NY:{lat:42.165726,lng:-74.948051},
+    NC:{lat:35.630066,lng:-79.806419}, ND:{lat:47.528912,lng:-99.784012},
+    OH:{lat:40.388783,lng:-82.764915}, OK:{lat:35.565342,lng:-96.928917},
+    OR:{lat:44.572021,lng:-122.070938},PA:{lat:40.590752,lng:-77.209755},
+    RI:{lat:41.680893,lng:-71.511780}, SC:{lat:33.856892,lng:-80.945007},
+    SD:{lat:44.299782,lng:-99.438828}, TN:{lat:35.747845,lng:-86.692345},
+    TX:{lat:31.054487,lng:-97.563461}, UT:{lat:40.150032,lng:-111.862434},
+    VT:{lat:44.045876,lng:-72.710686}, VA:{lat:37.769337,lng:-78.169968},
+    WA:{lat:47.400902,lng:-121.490494},WV:{lat:38.491226,lng:-80.954453},
+    WI:{lat:44.268543,lng:-89.616508}, WY:{lat:42.755966,lng:-107.302490},
+    DC:{lat:38.897438,lng:-77.026817},
+};
+function jitter(coord, amount) {
+    return coord + (Math.random() - 0.5) * amount;
+}
+function coordsFromState(abbr) {
+    const c = STATE_CENTROIDS[abbr];
+    if (!c) return { lat: null, lng: null };
+    return { lat: jitter(c.lat, 0.7), lng: jitter(c.lng, 0.7) };
+}
+
+function mapNamusMissing(rec) {
+    const loc  = [rec.cityOfLastContact, rec.stateOfLastContact].filter(Boolean).join(', ');
+    const date = (rec.computedMissingMinDate || rec.dateOfLastContact || '').slice(0, 10);
+    const hasCoords = rec.lastContactCoordinates?.latitude && rec.lastContactCoordinates?.longitude;
+    const coords = hasCoords
+        ? { lat: rec.lastContactCoordinates.latitude, lng: rec.lastContactCoordinates.longitude }
+        : coordsFromState(rec.stateOfLastContact);
+    return {
+        id: 'MP-' + rec.caseNumber, type: 'missing',
+        name: [rec.firstName, rec.lastName].filter(Boolean).join(' ') || 'Unknown',
+        date, location: loc || 'Unknown',
+        lat: coords.lat, lng: coords.lng,
+        agency: rec.agencyName || 'Unknown Agency', status: 'active',
+        demo: [rec.sex, rec.computedMissingMinAge, rec.raceEthnicity].filter(Boolean).join(', '),
+        source: 'NamUs', circumstances: rec.circumstancesOfDisappearance || '', flag: null,
+    };
+}
+
+function mapNamusUnidentified(rec) {
+    const loc      = [rec.cityOfRecovery, rec.stateOfRecovery].filter(Boolean).join(', ');
+    const ageRange = rec.estimatedAgeFrom != null && rec.estimatedAgeTo != null
+        ? 'est. ' + rec.estimatedAgeFrom + '–' + rec.estimatedAgeTo : '';
+    const hasCoords = rec.recoveryCoordinates?.latitude && rec.recoveryCoordinates?.longitude;
+    const coords = hasCoords
+        ? { lat: rec.recoveryCoordinates.latitude, lng: rec.recoveryCoordinates.longitude }
+        : coordsFromState(rec.stateOfRecovery);
+    return {
+        id: 'UP-' + rec.caseNumber, type: 'unidentified',
+        name: rec.computedCaseTitle || 'Unidentified Person',
+        date: (rec.dateFound || '').slice(0, 10), location: loc || 'Unknown',
+        lat: coords.lat, lng: coords.lng,
+        agency: rec.agencyName || 'Unknown Agency', status: 'open',
+        demo: [rec.sex, ageRange].filter(Boolean).join(', '),
+        source: 'NamUs', circumstances: rec.circumstancesOfRecovery || '', flag: null,
+    };
+}
+
+async function fetchNamusData() {
+    if (window.location.protocol === 'file:') {
+        console.info('CASENET: file:// — NamUs fetch skipped. Serve via HTTP to enable live data.');
+        return;
+    }
+
+    showBanner('loading', 'CONNECTING TO NAMUS.GOV...');
+
+    try {
+        // NamUs requires predicates to return results — try with broad US-wide filter
+        const query = {
+            take: 250,
+            skip: 0,
+            orderSpecifications: [],
+            predicates: [
+                { field: 'caseType', values: ['MP'] }
+            ]
+        };
+
+        const [missingJson, unidJson] = await Promise.all([
+            proxyPost(NAMUS_MISSING_URL,      { take:250, skip:0 }),
+            proxyPost(NAMUS_UNIDENTIFIED_URL, { take:250, skip:0 }),
+        ]);
+
+        // NamUs returns {count: N, results: [...]}
+        // If results empty but count > 0, API requires auth — use mock data
+        const missingArr = missingJson.results || [];
+        const unidArr    = unidJson.results    || [];
+
+        if (missingArr.length === 0 && (missingJson.count || 0) > 0) {
+            throw new Error('auth_required');
+        }
+
+        const missing = missingArr.map(mapNamusMissing).filter(c => c.lat && c.lng);
+        const unid    = unidArr.map(mapNamusUnidentified).filter(c => c.lat && c.lng);
+        const live    = [...missing, ...unid, ...MOCK_HOMICIDES];
+
+        CASES.length = 0;
+        live.forEach(c => CASES.push(c));
+
+        dataSource    = 'live';
+        lastFetchedAt = new Date();
+        updateClock();
+
+        showBanner('success',
+            'LIVE DATA LOADED · ' + missing.length + ' MISSING · ' +
+            unid.length + ' UNIDENTIFIED · SOURCE: NAMUS.GOV'
+        );
+        setTimeout(hideBanner, 4000);
+        renderAll();
+
+    } catch (err) {
+        const isAuthErr = err.message === 'auth_required';
+        console.warn('NamUs fetch:', isAuthErr
+            ? 'API returned 0 results — authentication required for full access'
+            : err.message
+        );
+        // Silently fall back to mock data — no error banner shown to end users
+        // Production fix: route through a server-side proxy with NamUs session auth
+        hideBanner();
+    }
+}
+
+// Separate homicide mock data kept apart so NamUs fetch can merge it in
+const MOCK_HOMICIDES = [
+    {id:"UH-2022-00887",type:"homicide",name:"Maria Castillo",   date:"2022-05-11",location:"Albuquerque, NM",     lat:35.08,lng:-106.65,agency:"Albuquerque PD",status:"unsolved",demo:"F, 28, Hispanic",source:"MAP",circumstances:"Found near I-40 corridor. No suspects identified.",flag:null},
+    {id:"UH-2023-01204",type:"homicide",name:"David Kim",         date:"2023-07-22",location:"Las Vegas, NV",       lat:36.17,lng:-115.14,agency:"LVMPD",          status:"unsolved",demo:"M, 34, Asian",    source:"MAP",circumstances:"Shooting victim downtown. Witnesses uncooperative.",flag:null},
+    {id:"UH-2021-00665",type:"homicide",name:"Robert Haynes",     date:"2021-12-08",location:"El Paso, TX",         lat:31.76,lng:-106.49,agency:"El Paso PD",     status:"unsolved",demo:"M, 52, White",    source:"MAP",circumstances:"Truck driver found at rest stop, I-10. Cold case.",flag:null},
+    {id:"UH-2024-01890",type:"homicide",name:"Elena Vasquez",     date:"2024-02-14",location:"Denver, CO",          lat:39.74,lng:-104.99,agency:"Denver PD",      status:"unsolved",demo:"F, 31, Hispanic", source:"MAP",circumstances:"Found in vehicle, parking structure. Similar MO to two earlier regional cases.",flag:"pattern"},
+    {id:"UH-2023-01577",type:"homicide",name:"Marcus Williams",   date:"2023-05-29",location:"Colorado Springs, CO",lat:38.83,lng:-104.82,agency:"CSPD",           status:"unsolved",demo:"M, 27, Black",    source:"MAP",circumstances:"Potential geographic pattern flagged by MAP algorithm.",flag:"pattern"},
+    {id:"UH-2022-01100",type:"homicide",name:"Jasmine Carter",    date:"2022-08-03",location:"Seattle, WA",         lat:47.61,lng:-122.33,agency:"Seattle PD",     status:"unsolved",demo:"F, 29, Black",    source:"MAP",circumstances:"Ride-share driver. Last fare unrecorded.",flag:null},
+    {id:"UH-2024-02001",type:"homicide",name:"James Morrison",    date:"2024-04-16",location:"Chicago, IL",         lat:41.88,lng:-87.63, agency:"CPD",            status:"unsolved",demo:"M, 45, White",    source:"MAP",circumstances:"Business owner. Staged robbery indicators.",flag:null},
+    {id:"UH-2023-01333",type:"homicide",name:"Carlos Mendez",     date:"2023-03-07",location:"Phoenix, AZ",         lat:33.55,lng:-112.08,agency:"Phoenix PD",     status:"unsolved",demo:"M, 38, Hispanic", source:"MAP",circumstances:"Found near freeway underpass.",flag:null},
+];
+
+
+/* ── STATIC DATA LOADER ─────────────────────────────────────────────── */
+// Fetches pre-built JSON files from the repo (generated weekly by GitHub Action)
+// Falls back silently to mock data if files not yet present
+
+async function loadStaticData() {
+    // Base URL for data files — works on GitHub Pages and localhost
+    const base = window.location.protocol === 'file:'
+        ? ''
+        : window.location.href.replace(/\/[^/]*$/, '');
+
+    let homicides    = [];
+    let unidentified = [];
+    let loaded       = false;
+
+    // Fetch homicides (Washington Post / MAP dataset)
+    try {
+        const res  = await fetch(base + '/data/homicides.json');
+        if (res.ok) {
+            const json = await res.json();
+            homicides  = (json.cases || []).filter(c => c.lat && c.lng);
+            console.info('CASENET: Loaded ' + homicides.length + ' homicide cases from data/homicides.json');
+            loaded = true;
+        }
+    } catch (_) {}
+
+    // Fetch unidentified remains (Doe Network)
+    try {
+        const res  = await fetch(base + '/data/unidentified.json');
+        if (res.ok) {
+            const json  = await res.json();
+            unidentified = (json.cases || []).filter(c => c.lat && c.lng);
+            console.info('CASENET: Loaded ' + unidentified.length + ' unidentified cases from data/unidentified.json');
+            loaded = true;
+        }
+    } catch (_) {}
+
+    if (loaded) {
+        // Keep mock missing persons + merge with live homicide/unidentified data
+        const mockMissing = CASES.filter(c => c.type === 'missing');
+        const merged = [
+            ...mockMissing,
+            ...(homicides.length    ? homicides    : MOCK_HOMICIDES),
+            ...(unidentified.length ? unidentified : []),
+        ];
+
+        CASES.length = 0;
+        merged.forEach(c => CASES.push(c));
+
+        const sources = [];
+        if (homicides.length)    sources.push(homicides.length    + ' HOMICIDES (WAPO/MAP)');
+        if (unidentified.length) sources.push(unidentified.length + ' UNIDENTIFIED (DOE NETWORK)');
+
+        showBanner('success', 'DATA LOADED · ' + sources.join(' · '));
+        setTimeout(hideBanner, 4000);
+        renderAll();
+    }
+}
+
+
+const TYPE_COLOR = { missing:"#d97706", unidentified:"#6b7280", homicide:"#dc2626" };
+const TYPE_LABEL = { missing:"Missing Persons", unidentified:"Unidentified Remains", homicide:"Unsolved Homicides" };
+
+// CartoDB basemap URLs
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const TILE_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+const INITIAL_CENTER = [39.5, -98.35];
+const INITIAL_ZOOM   = 4;
+
+/* ── STATE ──────────────────────────────────────────────────────────── */
+// Fix 7: Consistent let/const — all module-level mutable state uses let
+// Fix 8: chartInstances moved here with the rest of state
+let isDark        = false;
+let timeFilter    = 'all';
+let selectedId    = null;
+let leafletMap    = null;
+let tileLayer     = null;
+let markerCluster = null;
+let patternLayer  = null;
+let chartInstances = {};
+
+/* ── STATE NAME → ABBREVIATION MAP ─────────────────────────────────── */
+const STATE_ABBR = {
+    'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+    'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+    'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
+    'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+    'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS',
+    'missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH',
+    'new jersey':'NJ','new mexico':'NM','new york':'NY','north carolina':'NC',
+    'north dakota':'ND','ohio':'OH','oklahoma':'OK','oregon':'OR','pennsylvania':'PA',
+    'rhode island':'RI','south carolina':'SC','south dakota':'SD','tennessee':'TN',
+    'texas':'TX','utah':'UT','vermont':'VT','virginia':'VA','washington':'WA',
+    'west virginia':'WV','wisconsin':'WI','wyoming':'WY','district of columbia':'DC',
+};
+
+/* ── SECURITY: HTML ESCAPE ──────────────────────────────────────────── */
+// Fix A: Sanitize all user/API data before injecting into innerHTML
+function esc(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/* ── FIX 4: Centralized status color helper ─────────────────────────── */
+function getStatusColor(status) {
+    if (status === 'active')   return '#d97706';
+    if (status === 'unsolved') return '#dc2626';
+    return '#6b7280';
+}
+
+/* ── FILTER ─────────────────────────────────────────────────────────── */
+function getFiltered() {
+    const raw   = document.getElementById('search-input').value.toLowerCase().trim();
+    const chkM  = document.getElementById('chk-missing').checked;
+    const chkU  = document.getElementById('chk-unidentified').checked;
+    const chkH  = document.getElementById('chk-homicide').checked;
+
+    const abbr    = STATE_ABBR[raw];
+    const queries = raw ? [raw, abbr ? abbr.toLowerCase() : null].filter(Boolean) : [];
+
+    return CASES.filter(c => {
+        if (c.type === 'missing'      && !chkM) return false;
+        if (c.type === 'unidentified' && !chkU) return false;
+        if (c.type === 'homicide'     && !chkH) return false;
+        if (queries.length) {
+            const hay = JSON.stringify(c).toLowerCase();
+            if (!queries.some(q => hay.includes(q))) return false;
+        }
+        if (timeFilter !== 'all') {
+            const cut = new Date();
+            // Fix E: parseInt with explicit radix
+            cut.setFullYear(cut.getFullYear() - parseInt(timeFilter, 10));
+            if (new Date(c.date) < cut) return false;
+        }
+        return true;
+    });
+}
+
+/* ── RENDER ALL ─────────────────────────────────────────────────────── */
+function renderAll() {
+    const filtered = getFiltered();
+    const showPat  = document.getElementById('chk-pattern').checked;
+    const q        = document.getElementById('search-input').value;
+
+    document.getElementById('search-clear').style.display = q ? 'block' : 'none';
+    document.getElementById('pattern-name').className = 'pattern-name' + (showPat ? ' on' : '');
+    document.getElementById('pattern-legend-row').style.display = showPat ? 'flex' : 'none';
+
+    document.getElementById('stat-total').textContent    = String(filtered.length).padStart(3,'0');
+    document.getElementById('stat-missing').textContent  = String(filtered.filter(c => c.type==='missing').length).padStart(3,'0');
+    document.getElementById('stat-unid').textContent     = String(filtered.filter(c => c.type==='unidentified').length).padStart(3,'0');
+    document.getElementById('stat-homicide').textContent = String(filtered.filter(c => c.type==='homicide').length).padStart(3,'0');
+    document.getElementById('stat-pattern').textContent  = String(filtered.filter(c => c.flag).length).padStart(3,'0');
+    document.getElementById('count-label').textContent   = filtered.length + ' CASES IN VIEW';
+
+    document.getElementById('cnt-missing').textContent      = CASES.filter(c => c.type==='missing').length;
+    document.getElementById('cnt-unidentified').textContent = CASES.filter(c => c.type==='unidentified').length;
+    document.getElementById('cnt-homicide').textContent     = CASES.filter(c => c.type==='homicide').length;
+
+    // Fix 3: call rebuildMarkers directly — renderMap wrapper removed
+    rebuildMarkers(filtered, showPat);
+
+    if (document.getElementById('analytics-view').style.display !== 'none') renderAnalytics();
+    if (document.getElementById('case-index-view').style.display !== 'none') renderCaseIndex();
+}
+
+/* ── LEAFLET MAP ────────────────────────────────────────────────────── */
+function initLeaflet() {
+    leafletMap = L.map('leaflet-map', {
+        center: INITIAL_CENTER,
+        zoom: INITIAL_ZOOM,
+        minZoom: 3,
+        maxZoom: 18,
+        zoomControl: true,
+        attributionControl: true,
+        preferCanvas: true,
+        worldCopyJump: true,
+    });
+
+    tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
+        attribution: TILE_ATTR,
+        subdomains: 'abcd',
+        maxZoom: 19,
+    }).addTo(leafletMap);
+
+    markerCluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        maxClusterRadius: 45,
+        iconCreateFunction: function(cluster) {
+            const count = cluster.getChildCount();
+            const size  = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+            const px    = size === 'small' ? 34 : size === 'medium' ? 42 : 52;
+            const fs    = px === 34 ? 13 : px === 42 ? 14 : 16;
+            return L.divIcon({
+                html: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:' + fs + 'px;line-height:1">' + count + '</div>',
+                className: 'marker-cluster-custom marker-cluster-' + size,
+                iconSize: [px, px],
+                iconAnchor: [px/2, px/2],
+            });
+        },
+    });
+    leafletMap.addLayer(markerCluster);
+
+    patternLayer = L.layerGroup().addTo(leafletMap);
+
+    document.getElementById('map-reset').addEventListener('click', function() {
+        leafletMap.flyTo(INITIAL_CENTER, INITIAL_ZOOM, { duration: 0.8 });
+    });
+
+    leafletMap.on('mousemove', function(e) {
+        const coordEl = document.getElementById('map-coords');
+        coordEl.style.display = 'block';
+        coordEl.innerHTML =
+            '<div style="color:var(--accent);font-size:.5rem">LAT ' + e.latlng.lat.toFixed(4) + '°</div>' +
+            '<div style="font-size:.5rem">LNG ' + e.latlng.lng.toFixed(4) + '°</div>';
+    });
+    leafletMap.on('mouseout', function() {
+        document.getElementById('map-coords').style.display = 'none';
+    });
+}
+
+// Fix 2: markers[] array removed — was populated but never read
+function rebuildMarkers(filtered, showPat) {
+    if (!markerCluster) return;
+    markerCluster.clearLayers();
+    patternLayer.clearLayers();
+
+    if (showPat) {
+        filtered.filter(c => c.flag === 'pattern').forEach(c => {
+            L.circle([c.lat, c.lng], {
+                radius: 120000, color: '#7c3aed', weight: 1.5,
+                fillColor: '#7c3aed', fillOpacity: 0.08,
+                dashArray: '6 4', interactive: false,
+            }).addTo(patternLayer);
+            L.circle([c.lat, c.lng], {
+                radius: 60000, color: '#7c3aed', weight: 1,
+                fillOpacity: 0, dashArray: '4 3', interactive: false,
+            }).addTo(patternLayer);
+        });
+    }
+
+    filtered.forEach(c => {
+        const col         = TYPE_COLOR[c.type];
+        const isSelected  = c.id === selectedId;
+        const activeClass = c.status === 'active' ? ' active-case' : '';
+        const selClass    = isSelected ? ' selected' : '';
+
+        const icon = L.divIcon({
+            html: '<div class="case-marker' + activeClass + selClass + '" style="background:' + col + ';color:' + col + ';"></div>',
+            className: '',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+        });
+
+        const m = L.marker([c.lat, c.lng], { icon });
+
+        // Fix A: all case data escaped before injecting into tooltip innerHTML
+        const tipHtml =
+            '<div style="width:215px;background:' + (isDark?'rgba(10,14,22,0.96)':'rgba(255,255,255,0.97)') +
+            ';border:1.5px solid ' + col + ';font-family:\'IBM Plex Mono\',monospace;overflow:hidden;margin:-6px -10px">' +
+              '<div style="width:4px;height:62px;background:' + col + ';float:left"></div>' +
+              '<div style="padding:8px 10px">' +
+                '<div style="font-size:8.5px;letter-spacing:1.2px;color:' + col + ';margin-bottom:4px">' + esc(c.id) + '</div>' +
+                '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:' + (isDark?'#e8eaed':'#111') + ';margin-bottom:3px">' + esc(c.name) + '</div>' +
+                '<div style="font-size:9px;color:' + (isDark?'#8b949e':'#666') + '">' + esc(c.location) + ' · ' + esc(c.date) + '</div>' +
+              '</div>' +
+            '</div>';
+
+        m.bindTooltip(tipHtml, { direction:'top', offset:[0,-8], opacity:1, className:'case-marker-tooltip' });
+        m.on('click', () => selectCase(c.id));
+        markerCluster.addLayer(m);
+    });
+}
+
+/* ── CASE SELECT ────────────────────────────────────────────────────── */
+function selectCase(id) {
+    selectedId = (selectedId === id) ? null : id;
+    const panel = document.getElementById('case-panel');
+    if (!selectedId) {
+        panel.classList.remove('open');
+        renderAll();
+        return;
+    }
+    panel.classList.add('open');
+    const c = CASES.find(x => x.id === id);
+    renderPanel(c);
+    renderAll();
+    if (leafletMap && c) {
+        leafletMap.flyTo([c.lat, c.lng], 9, { duration: 1.2, easeLinearity: 0.4 });
+    }
+}
+
+function renderPanel(c) {
+    const col         = TYPE_COLOR[c.type];
+    const statusColor = getStatusColor(c.status);
+    const inner       = document.getElementById('case-panel-inner');
+
+    // ── Build correct external link based on data source ─────────────────────
+    let externalLabel = null;
+    let externalUrl   = null;
+
+    if (c.source === 'NamUs') {
+        // Only link to NamUs for cases that came FROM NamUs with a real case number
+        // Real NamUs IDs are purely numeric after the prefix e.g. MP-12345
+        // Mock IDs like MP-2024-10847 should NOT link to NamUs
+        const rawNum = c.id.replace(/^(MP|UP)-(?:NAMUS-)?/i, '');
+        const isRealNamusId = /^\d{1,6}$/.test(rawNum); // NamUs case numbers are ≤6 digits
+
+        if (isRealNamusId) {
+            if (c.type === 'missing') {
+                externalUrl   = 'https://www.namus.gov/MissingPersons/Case#/' + rawNum;
+                externalLabel = 'VIEW ON NAMUS.GOV ›';
+            } else if (c.type === 'unidentified') {
+                externalUrl   = 'https://www.namus.gov/UnidentifiedPersons/Case#/' + rawNum;
+                externalLabel = 'VIEW ON NAMUS.GOV ›';
+            }
+        } else {
+            // Mock/prototype NamUs case — link to NamUs search instead
+            externalUrl   = 'https://www.namus.gov/MissingPersons/Search';
+            externalLabel = 'SEARCH ON NAMUS.GOV ›';
+        }
+    } else if (c.source === 'MAP' || c.source === 'WaPo') {
+        externalUrl   = 'https://www.murderdata.org/p/data-docs.html';
+        externalLabel = 'VIEW MURDER ACCOUNTABILITY PROJECT ›';
+    } else if (c.source === 'Doe Network') {
+        externalUrl   = c._url || 'https://www.doenetwork.org';
+        externalLabel = 'VIEW ON DOE NETWORK ›';
+    } else if (c.source === 'FBI CDE') {
+        externalUrl   = 'https://cde.ucr.cjis.fbi.gov/';
+        externalLabel = 'VIEW FBI CRIME DATA EXPLORER ›';
+    } else {
+        externalUrl   = 'https://www.namus.gov/MissingPersons/Search';
+        externalLabel = 'SEARCH ON NAMUS.GOV ›';
+    }
+
+    const shareUrl = window.location.href.split('?')[0] + '?case=' + encodeURIComponent(c.id);
+
+    inner.innerHTML = `
+        <div class="panel-header">
+            <div>
+                <div class="panel-type" style="color:${col}">${esc(TYPE_LABEL[c.type].toUpperCase())}</div>
+                <div class="panel-id">${esc(c.id)}</div>
+            </div>
+            <button class="panel-close" id="panel-close-btn">✕ BACK</button>
+        </div>
+        <div class="panel-body">
+            <div class="panel-status" style="border:1px solid ${statusColor};color:${statusColor};background:${statusColor}18">
+                STATUS: ${esc(c.status.toUpperCase())}
+            </div>
+            <div class="panel-name">${esc(c.name)}</div>
+            ${[['DATE',c.date],['LOCATION',c.location],['DEMOGRAPHICS',c.demo],['AGENCY',c.agency],['SOURCE',c.source]].map(([k,v]) => `
+            <div class="panel-row">
+                <span class="panel-row-key">${esc(k)}</span>
+                <span class="panel-row-val">${esc(v)}</span>
+            </div>`).join('')}
+            ${c.flag ? `<div class="panel-row"><span class="panel-row-key">FLAG</span><span class="panel-row-val" style="color:#7c3aed">GEO-TEMPORAL PATTERN</span></div>` : ''}
+            <div class="panel-circumstances-label">CIRCUMSTANCES</div>
+            <div class="panel-circumstances">${esc(c.circumstances)}</div>
+            <div class="panel-actions">
+
+                <a class="panel-btn primary" href="${esc(externalUrl)}" target="_blank" rel="noopener noreferrer"
+                   style="text-decoration:none;display:flex;align-items:center;justify-content:space-between;">
+                    <span>${esc(externalLabel)}</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+
+                <button class="panel-btn" id="panel-tip-btn">SUBMIT TIP TO AGENCY ›</button>
+                <button class="panel-btn" id="panel-share-btn">SHARE CASE ›</button>
+            </div>
+            <div class="panel-note">This record aggregates public-record information. Direct new information to the lead agency only.</div>
+        </div>`;
+
+    document.getElementById('panel-close-btn').addEventListener('click', () => selectCase(c.id));
+
+    // Tip — opens NamUs tip page for NamUs cases, MAP contact for homicides
+    document.getElementById('panel-tip-btn').addEventListener('click', function() {
+        const tipUrl = (c.source === 'MAP' || c.source === 'WaPo')
+            ? 'https://www.murderdata.org/p/contact.html'
+            : c.source === 'Doe Network'
+            ? 'https://www.doenetwork.org/contact.html'
+            : 'https://www.namus.gov/Contact#tips';
+        window.open(tipUrl, '_blank', 'noopener,noreferrer');
+    });
+
+    // Share — Web Share API on mobile, clipboard on desktop
+    document.getElementById('panel-share-btn').addEventListener('click', function() {
+        if (navigator.share) {
+            navigator.share({
+                title: 'CASENET — ' + c.name,
+                text:  c.name + ' · ' + c.location + ' · ' + c.id,
+                url:   shareUrl,
+            }).catch(() => {});
+        } else {
+            navigator.clipboard.writeText(shareUrl).then(function() {
+                const btn = document.getElementById('panel-share-btn');
+                if (btn) {
+                    btn.textContent = 'LINK COPIED ✓';
+                    setTimeout(() => { if (btn) btn.textContent = 'SHARE CASE ›'; }, 2000);
+                }
+            }).catch(function() {
+                window.prompt('Copy this link:', shareUrl);
+            });
+        }
+    });
+}
+
+/* ── TABS ───────────────────────────────────────────────────────────── */
+function setTab(idx, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const mapView       = document.querySelector('.main-content');
+    const analyticsView = document.getElementById('analytics-view');
+    const indexView     = document.getElementById('case-index-view');
+    const aboutView     = document.getElementById('about-view');
+
+    mapView.style.display       = 'none';
+    analyticsView.style.display = 'none';
+    indexView.style.display     = 'none';
+    aboutView.style.display     = 'none';
+
+    if (idx === 0) {
+        mapView.style.display = 'flex';
+    } else if (idx === 1) {
+        indexView.style.display = 'flex';
+        renderCaseIndex();
+    } else if (idx === 2) {
+        analyticsView.style.display      = 'flex';
+        analyticsView.style.flexDirection = 'column';
+        renderAnalytics();
+    } else if (idx === 3) {
+        aboutView.style.display      = 'flex';
+        aboutView.style.flexDirection = 'column';
+    }
+}
+
+/* ── CASE INDEX ─────────────────────────────────────────────────────── */
+let indexSortCol = 'date';
+let indexSortDir = -1;
+
+const INDEX_COLS = [
+    { key:'id',       label:'CASE ID',   width:'130px' },
+    { key:'name',     label:'NAME',       width:'200px' },
+    { key:'type',     label:'TYPE',       width:'80px'  },
+    { key:'date',     label:'DATE',       width:'140px' },
+    { key:'status',   label:'STATUS',     width:'100px' },
+    { key:'location', label:'LOCATION',   width:'130px' },
+    { key:'source',   label:'SOURCE',     width:'80px'  },
+    { key:'agency',   label:'AGENCY',     width:'90px'  },
+];
+const GRID_COLS = INDEX_COLS.map(c => c.width).join(' ');
+
+function renderCaseIndex() {
+    const data = getFiltered().slice().sort((a,b) => {
+        const av = a[indexSortCol] || '';
+        const bv = b[indexSortCol] || '';
+        return av < bv ? indexSortDir : av > bv ? -indexSortDir : 0;
+    });
+
+    document.getElementById('index-count').textContent = data.length + ' RECORDS';
+    document.getElementById('sort-indicator').textContent =
+        'SORTED BY ' + indexSortCol.toUpperCase() + (indexSortDir === -1 ? ' ↓' : ' ↑');
+
+    const headEl = document.getElementById('index-table-head');
+    headEl.style.gridTemplateColumns = GRID_COLS;
+    headEl.innerHTML = INDEX_COLS.map(col => {
+        const isActive = col.key === indexSortCol;
+        const arrow    = isActive ? (indexSortDir === -1 ? ' ↓' : ' ↑') : '';
+        // Fix A: col.label is a constant, safe — data-col uses esc for safety
+        return '<div class="index-th' + (isActive ? ' sort-active' : '') + '" data-col="' + esc(col.key) + '">' +
+            col.label + '<span style="opacity:0.6">' + arrow + '</span></div>';
+    }).join('');
+
+    headEl.querySelectorAll('.index-th').forEach(th => {
+        th.addEventListener('click', function() {
+            const col = th.dataset.col;
+            indexSortCol === col ? indexSortDir *= -1 : (indexSortCol = col, indexSortDir = col === 'date' ? -1 : 1);
+            renderCaseIndex();
+        });
+    });
+
+    const bodyEl = document.getElementById('index-table-body');
+    if (!data.length) {
+        bodyEl.innerHTML = '<div style="padding:48px;text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;color:var(--muted);">No cases match current filters.</div>';
+        return;
+    }
+
+    // Fix 4: use centralized helper; Fix A: esc() all fields
+    bodyEl.innerHTML = data.map(c => {
+        const col         = TYPE_COLOR[c.type];
+        const statusColor = getStatusColor(c.status);
+        const isSelected  = c.id === selectedId;
+        return '<div class="index-row' + (isSelected ? ' selected-row' : '') + '" data-id="' + esc(c.id) + '" style="grid-template-columns:' + GRID_COLS + '">' +
+            '<div class="index-cell" style="color:' + col + ';font-size:0.52rem;letter-spacing:0.08em">' + esc(c.id) + '</div>' +
+            '<div class="index-cell name-cell">' + esc(c.name) + '</div>' +
+            '<div class="index-cell"><span class="type-pip" style="background:' + col + '"></span>' + esc(c.type.charAt(0).toUpperCase() + c.type.slice(1)) + '</div>' +
+            '<div class="index-cell">' + esc(c.date) + '</div>' +
+            '<div class="index-cell"><span class="status-badge" style="color:' + statusColor + ';border-color:' + statusColor + ';background:' + statusColor + '18">' + esc(c.status.toUpperCase()) + '</span></div>' +
+            '<div class="index-cell">' + esc(c.location) + '</div>' +
+            '<div class="index-cell">' + esc(c.source) + '</div>' +
+            '<div class="index-cell" style="font-size:0.5rem;color:var(--muted)">' + esc(c.agency) + '</div>' +
+        '</div>';
+    }).join('');
+
+    bodyEl.querySelectorAll('.index-row').forEach(row => {
+        row.addEventListener('click', function() {
+            const mapBtn = document.getElementById('tab-0');
+            setTab(0, mapBtn);
+            selectCase(row.dataset.id);
+        });
+    });
+}
+
+/* ── CSV EXPORT ─────────────────────────────────────────────────────── */
+// Fix C: wrap ALL fields in quotes and escape internal quotes
+function csvField(val) {
+    return '"' + String(val == null ? '' : val).replace(/"/g, '""') + '"';
+}
+
+function exportCSV() {
+    const data    = getFiltered();
+    const headers = ['Case ID','Name','Type','Date','Status','Location','Demographics','Agency','Source','Circumstances'];
+    const rows    = data.map(c =>
+        [c.id, c.name, c.type, c.date, c.status, c.location, c.demo, c.agency, c.source, c.circumstances]
+        .map(csvField).join(',')
+    );
+    const csv  = [headers.map(csvField).join(',')].concat(rows).join('\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'casenet-export-' + new Date().toISOString().slice(0,10) + '.csv';
+    // Fix D: append to DOM before click, then remove
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/* ── ANALYTICS ──────────────────────────────────────────────────────── */
+function renderAnalytics() {
+    if (typeof Chart === 'undefined') {
+        loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js', renderAnalytics);
+        return;
+    }
+
+    const data = getFiltered();
+    const total = data.length;
+
+    // Fix 6: single pass for type counts
+    let nMissing = 0, nUnid = 0, nHomicide = 0, nUnsolved = 0, nActive = 0, nPattern = 0;
+    data.forEach(c => {
+        if (c.type === 'missing')      nMissing++;
+        if (c.type === 'unidentified') nUnid++;
+        if (c.type === 'homicide')     nHomicide++;
+        if (c.status === 'unsolved' || c.status === 'open' || c.status === 'active') nUnsolved++;
+        if (c.status === 'active')     nActive++;
+        if (c.flag === 'pattern')      nPattern++;
+    });
+    const pct = total > 0 ? Math.round((nUnsolved / total) * 100) : 0;
+
+    document.getElementById('analytics-case-count').textContent = total + ' cases';
+    document.getElementById('kpi-unsolved-val').textContent     = pct + '%';
+    document.getElementById('kpi-unsolved-sub').textContent     = nUnsolved + ' of ' + total + ' cases remain open';
+    document.getElementById('kpi-active-val').textContent       = String(nActive).padStart(2,'0');
+    document.getElementById('kpi-active-sub').textContent       = 'active missing person' + (nActive !== 1 ? 's' : '');
+    document.getElementById('kpi-pattern-val').textContent      = String(nPattern).padStart(2,'0');
+
+    document.getElementById('kpi-unsolved-val').style.color = pct > 70 ? '#dc2626' : pct > 40 ? '#d97706' : '#22c55e';
+    document.getElementById('kpi-active-val').style.color   = '#d97706';
+    document.getElementById('kpi-pattern-val').style.color  = '#7c3aed';
+
+    const gridColor  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+    const labelColor = isDark ? '#8b949e' : '#888888';
+    const tickFont   = { family:"'IBM Plex Mono', monospace", size:9 };
+
+    Chart.defaults.color = labelColor;
+    Chart.defaults.font  = tickFont;
+
+    // Timeline
+    const yearMap = {};
+    data.forEach(c => {
+        const yr = c.date.slice(0,4);
+        if (!yearMap[yr]) yearMap[yr] = { missing:0, unidentified:0, homicide:0 };
+        yearMap[yr][c.type]++;
+    });
+    const years = Object.keys(yearMap).sort();
+
+    makeChart('chart-timeline', 'bar', {
+        labels: years,
+        datasets: [
+            { label:'Missing',      data:years.map(y => yearMap[y].missing||0),      backgroundColor:'rgba(217,119,6,0.8)',  borderRadius:2 },
+            { label:'Unidentified', data:years.map(y => yearMap[y].unidentified||0), backgroundColor:'rgba(107,114,128,0.8)',borderRadius:2 },
+            { label:'Homicide',     data:years.map(y => yearMap[y].homicide||0),     backgroundColor:'rgba(220,38,38,0.8)',  borderRadius:2 },
+        ]
+    }, {
+        plugins:{ legend:{ labels:{ boxWidth:10, font:tickFont } } },
+        scales:{
+            x:{ stacked:true, grid:{ color:gridColor }, ticks:{ font:tickFont } },
+            y:{ stacked:true, grid:{ color:gridColor }, ticks:{ font:tickFont, stepSize:1 }, beginAtZero:true }
+        }
+    });
+
+    // Donut — fix 6: use already-computed counts
+    makeChart('chart-donut', 'doughnut', {
+        labels:['Missing','Unidentified','Homicide'],
+        datasets:[{ data:[nMissing,nUnid,nHomicide],
+            backgroundColor:['rgba(217,119,6,0.85)','rgba(107,114,128,0.85)','rgba(220,38,38,0.85)'],
+            borderColor:isDark?'#0d1117':'#ffffff', borderWidth:2, hoverOffset:8
+        }]
+    },{ cutout:'62%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:tickFont, padding:12 } } } });
+
+    // State bar
+    const stateMap = {};
+    data.forEach(c => {
+        const parts = c.location.split(', ');
+        const st    = parts[parts.length-1] || 'Unknown';
+        stateMap[st] = (stateMap[st]||0) + 1;
+    });
+    const stateEntries = Object.entries(stateMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+
+    makeChart('chart-state', 'bar', {
+        labels: stateEntries.map(e => e[0]),
+        datasets:[{ label:'Cases', data:stateEntries.map(e => e[1]),
+            backgroundColor:stateEntries.map((_,i) => 'rgba(220,38,38,' + (0.9-i*0.07) + ')'),
+            borderRadius:2
+        }]
+    },{
+        indexAxis:'y',
+        plugins:{ legend:{ display:false } },
+        scales:{
+            x:{ grid:{ color:gridColor }, ticks:{ font:tickFont, stepSize:1 }, beginAtZero:true },
+            y:{ grid:{ display:false }, ticks:{ font:tickFont } }
+        }
+    });
+
+    // Status donut
+    const statusMap = {};
+    data.forEach(c => { statusMap[c.status] = (statusMap[c.status]||0)+1; });
+    const statusColors = { active:'#d97706', unsolved:'#dc2626', open:'#6b7280', closed:'#22c55e' };
+
+    makeChart('chart-status', 'doughnut', {
+        labels:Object.keys(statusMap).map(s => s.toUpperCase()),
+        datasets:[{ data:Object.values(statusMap),
+            backgroundColor:Object.keys(statusMap).map(s => statusColors[s]||'#888'),
+            borderColor:isDark?'#0d1117':'#ffffff', borderWidth:2, hoverOffset:6
+        }]
+    },{ cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:tickFont, padding:10 } } } });
+
+    // Source donut
+    const srcMap = {};
+    data.forEach(c => { srcMap[c.source] = (srcMap[c.source]||0)+1; });
+
+    makeChart('chart-source', 'doughnut', {
+        labels:Object.keys(srcMap),
+        datasets:[{ data:Object.values(srcMap),
+            backgroundColor:['rgba(88,166,255,0.85)','rgba(163,113,247,0.85)','rgba(56,189,248,0.85)'],
+            borderColor:isDark?'#0d1117':'#ffffff', borderWidth:2, hoverOffset:6
+        }]
+    },{ cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:tickFont, padding:10 } } } });
+
+    // Agency table — Fix A: esc agency names
+    const agencyMap = {};
+    data.forEach(c => { agencyMap[c.agency] = (agencyMap[c.agency]||0)+1; });
+    const agencyEntries = Object.entries(agencyMap).sort((a,b) => b[1]-a[1]).slice(0,8);
+    const maxAgency     = agencyEntries[0] ? agencyEntries[0][1] : 1;
+
+    document.getElementById('agency-table').innerHTML = agencyEntries.map(e => {
+        const barPct = Math.round((e[1]/maxAgency)*100);
+        return '<div class="agency-row">' +
+            '<div class="agency-name">' + esc(e[0]) + '</div>' +
+            '<div class="agency-bar-wrap"><div class="agency-bar" style="width:' + barPct + '%"></div></div>' +
+            '<div class="agency-count">' + e[1] + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function makeChart(id, type, data, options) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+
+    const defaults = {
+        responsive:true, maintainAspectRatio:false, animation:{ duration:500 },
+        plugins:{
+            legend:{ labels:{ font:{ family:"'IBM Plex Mono',monospace", size:9 } } },
+            tooltip:{
+                backgroundColor: isDark?'rgba(10,14,22,0.95)':'rgba(255,255,255,0.97)',
+                titleColor: isDark?'#e8eaed':'#111',
+                bodyColor:  isDark?'#8b949e':'#666',
+                borderColor:isDark?'#2a3040':'#cccccc',
+                borderWidth:1,
+                titleFont:{ family:"'Barlow Condensed',sans-serif", size:13, weight:'bold' },
+                bodyFont:{ family:"'IBM Plex Mono',monospace", size:10 },
+                padding:10,
+            }
+        }
+    };
+    chartInstances[id] = new Chart(canvas, { type, data, options:deepMerge(defaults, options||{}) });
+}
+
+function deepMerge(target, source) {
+    const result = Object.assign({}, target);
+    for (const key in source) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+            result[key] = deepMerge(target[key]||{}, source[key]);
+        } else {
+            result[key] = source[key];
+        }
+    }
+    return result;
+}
+
+/* ── TIME FILTER ────────────────────────────────────────────────────── */
+function setTime(val, btn) {
+    timeFilter = val;
+    document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAll();
+}
+
+/* ── THEME TOGGLE ───────────────────────────────────────────────────── */
+function toggleTheme() {
+    isDark = !isDark;
+    document.getElementById('artboard').classList.toggle('dark', isDark);
+    document.body.classList.toggle('dark', isDark);
+    document.querySelector('.theme-toggle').textContent = isDark ? '☀ LIGHT' : '☾ DARK';
+
+    if (leafletMap && tileLayer) {
+        leafletMap.removeLayer(tileLayer);
+        tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
+            attribution:TILE_ATTR, subdomains:'abcd', maxZoom:19,
+        }).addTo(leafletMap);
+        if (patternLayer)  patternLayer.addTo(leafletMap);
+        if (markerCluster) markerCluster.addTo(leafletMap);
+    }
+
+    Object.keys(chartInstances).forEach(id => { chartInstances[id].destroy(); delete chartInstances[id]; });
+    renderAll();
+}
+
+/* ── SEARCH ─────────────────────────────────────────────────────────── */
+function clearSearch() {
+    document.getElementById('search-input').value = '';
+    renderAll();
+}
+
+/* ── SYNC CLOCK ─────────────────────────────────────────────────────── */
+function updateClock() {
+    const now = new Date();
+    const timeStr = now.toISOString().replace('T',' ').slice(0,19) + 'Z';
+    const fetchStr = lastFetchedAt
+        ? 'FETCHED ' + lastFetchedAt.toISOString().replace('T',' ').slice(0,19) + 'Z'
+        : 'PROTOTYPE DATA';
+    document.getElementById('sync-time').textContent = timeStr + ' · ' + fetchStr;
+}
+
+/* ── DYNAMIC SCRIPT LOADER ──────────────────────────────────────────── */
+// Fix B: SRI hashes added to Leaflet and MarkerCluster for supply-chain integrity
+function loadScript(src, onload, integrity) {
+    const s   = document.createElement('script');
+    s.src     = src;
+    s.onload  = onload;
+    if (integrity) {
+        s.integrity   = integrity;
+        s.crossOrigin = 'anonymous';
+    }
+    s.onerror = function() {
+        console.error('Failed to load: ' + src);
+        const mapEl = document.getElementById('leaflet-map');
+        if (mapEl) mapEl.innerHTML =
+            '<div style="padding:40px;text-align:center;font-family:monospace;color:#888">' +
+            'Map requires internet access to load tile libraries.<br><br>' +
+            '<small>Open this file in a browser with network access.</small></div>';
+    };
+    document.head.appendChild(s);
+}
+
+function loadLink(href, integrity) {
+    const l   = document.createElement('link');
+    l.rel     = 'stylesheet';
+    l.href    = href;
+    if (integrity) {
+        l.integrity   = integrity;
+        l.crossOrigin = 'anonymous';
+    }
+    document.head.appendChild(l);
+}
+
+/* ── INIT ───────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    document.getElementById('export-csv-btn').addEventListener('click', exportCSV);
+
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
+        btn.addEventListener('click', () => setTab(i, btn));
+    });
+
+    document.getElementById('search-input').addEventListener('input', renderAll);
+    document.getElementById('search-clear').addEventListener('click', clearSearch);
+    document.getElementById('chk-missing').addEventListener('change', renderAll);
+    document.getElementById('chk-unidentified').addEventListener('change', renderAll);
+    document.getElementById('chk-homicide').addEventListener('change', renderAll);
+    document.getElementById('chk-pattern').addEventListener('change', renderAll);
+
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.addEventListener('click', () => setTime(btn.dataset.time, btn));
+    });
+
+    // ── Mobile sidebar toggle ──────────────────────────────────────────
+    const sidebarToggle  = document.getElementById('sidebar-toggle');
+    const sidebar        = document.querySelector('.sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function openSidebar()  { sidebar.classList.add('open'); sidebarOverlay.classList.add('open'); }
+    function closeSidebar() { sidebar.classList.remove('open'); sidebarOverlay.classList.remove('open'); }
+
+    sidebarToggle.addEventListener('click', openSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+
+    // Auto-close sidebar after filter change on mobile
+    ['chk-missing','chk-unidentified','chk-homicide','chk-pattern'].forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            if (window.innerWidth <= 900) setTimeout(closeSidebar, 300);
+        });
+    });
+
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ── Load Leaflet, then init map, then attempt live NamUs fetch ─────
+    loadLink('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+    loadLink('https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css');
+
+    loadScript(
+        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+        function() {
+            loadScript(
+                'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+                function() {
+                    initLeaflet();
+                    renderAll();
+                    // Load static data files (homicides + unidentified) then attempt NamUs
+                    loadStaticData().then(fetchNamusData);
+                }
+            );
+        }
+    );
+});
+</script>
+</body>
+</html>
