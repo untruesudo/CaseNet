@@ -9,7 +9,7 @@ A public-facing visualization and aggregation tool for missing persons, unidenti
 
 ## Live Demo
 
-[**casenet.untruesudo.github.io**](https://untruesudo.github.io/casenet) 
+[**CaseNet.untruesudo.github.io**](https://untruesudo.github.io/CaseNet) 
 
 ---
 
