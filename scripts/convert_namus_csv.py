@@ -106,16 +106,20 @@ def convert(input_path):
     print(f'Columns: {headers[:10]}...')
 
     # Auto-detect column names — NamUs CSV headers vary by export version
-    col_id      = find_col(headers, 'Case Number', 'CaseNumber', 'NamUs #', 'NamUsNumber', 'ID')
-    col_title   = find_col(headers, 'Case Title', 'CaseTitle', 'Title', 'Name')
-    col_date    = find_col(headers, 'Date Found', 'DateFound', 'Recovery Date', 'RecoveryDate')
-    col_city    = find_col(headers, 'City of Recovery', 'CityOfRecovery', 'City')
-    col_state   = find_col(headers, 'State of Recovery', 'StateOfRecovery', 'State')
+    # Actual NamUs export columns: Case, ME/C Case, DBF, Age From, Age To,
+    # City, County, State, Biological Sex, Race / Ethnicity
+    col_id      = find_col(headers, 'Case', 'Case Number', 'CaseNumber', 'NamUs #', 'NamUsNumber', 'ID')
+    col_title   = find_col(headers, 'ME/C Case', 'Case Title', 'CaseTitle', 'Title', 'Name', 'Description')
+    col_date    = find_col(headers, 'DBF', 'Date Found', 'Date Body Found', 'DateFound', 'Recovery Date', 'RecoveryDate')
+    col_city    = find_col(headers, 'City', 'City of Recovery', 'CityOfRecovery')
+    col_county  = find_col(headers, 'County', 'County of Recovery')
+    col_state   = find_col(headers, 'State', 'State of Recovery', 'StateOfRecovery')
     col_agency  = find_col(headers, 'Agency Name', 'AgencyName', 'Agency')
-    col_sex     = find_col(headers, 'Sex', 'Gender')
-    col_age_min = find_col(headers, 'Estimated Age From', 'EstimatedAgeFrom', 'Age From', 'Min Age')
-    col_age_max = find_col(headers, 'Estimated Age To', 'EstimatedAgeTo', 'Age To', 'Max Age')
-    col_circ    = find_col(headers, 'Circumstances of Recovery', 'Circumstances', 'Description')
+    col_sex     = find_col(headers, 'Biological Sex', 'Sex', 'Gender')
+    col_race    = find_col(headers, 'Race / Ethnicity', 'Race', 'Ethnicity', 'Race/Ethnicity')
+    col_age_min = find_col(headers, 'Age From', 'Estimated Age From', 'EstimatedAgeFrom', 'Min Age')
+    col_age_max = find_col(headers, 'Age To', 'Estimated Age To', 'EstimatedAgeTo', 'Max Age')
+    col_circ    = find_col(headers, 'Circumstances of Recovery', 'Circumstances', 'Description', 'Notes')
     col_lat     = find_col(headers, 'Latitude', 'Lat')
     col_lng     = find_col(headers, 'Longitude', 'Lon', 'Lng')
 
@@ -127,12 +131,28 @@ def convert(input_path):
         title    = str(row.get(col_title, '') if col_title else '').strip()
         date     = str(row.get(col_date, '') if col_date else '').strip()[:10]
         city     = str(row.get(col_city, '') if col_city else '').strip()
+        county   = str(row.get(col_county, '') if col_county else '').strip()
         state    = str(row.get(col_state, '') if col_state else '').strip()
         agency   = str(row.get(col_agency, '') if col_agency else '').strip()
         sex      = str(row.get(col_sex, '') if col_sex else '').strip()
+        race     = str(row.get(col_race, '') if col_race else '').strip()
         age_min  = str(row.get(col_age_min, '') if col_age_min else '').strip()
         age_max  = str(row.get(col_age_max, '') if col_age_max else '').strip()
         circ     = str(row.get(col_circ, '') if col_circ else '').strip()
+
+        # Build a descriptive name from available fields
+        # NamUs 'ME/C Case' is the medical examiner case number, not a real name
+        # Build: "Unidentified [Sex] — [City/County], [State]"
+        desc_parts = []
+        if sex and sex.lower() not in ('unknown', ''):
+            desc_parts.append(sex)
+        loc_desc = city or county or state
+        name = 'Unidentified ' + ' '.join(desc_parts) if desc_parts else 'Unidentified Person'
+        if loc_desc:
+            name += ' — ' + loc_desc + (', ' + state if state and loc_desc != state else '')
+
+        # Case ID — use NamUs case number
+        uid = 'UP-' + (case_num or str(len(cases) + 1))
 
         # Coordinates — use from CSV if available, otherwise centroid
         lat_raw = row.get(col_lat, '') if col_lat else ''
@@ -150,17 +170,17 @@ def convert(input_path):
             continue  # skip if no location at all
 
         age_str = ''
-        if age_min and age_max:
+        if age_min and age_max and age_min != age_max:
             age_str = f'est. {age_min}–{age_max}'
         elif age_min:
             age_str = f'est. {age_min}+'
-        demo = ', '.join(filter(None, [sex, age_str]))
-        loc  = ', '.join(filter(None, [city, state]))
+        demo = ', '.join(filter(None, [sex, age_str, race]))
+        loc  = ', '.join(filter(None, [city or county, state]))
 
         cases.append({
-            'id':           'UP-' + (case_num or str(len(cases))),
+            'id':           uid,
             'type':         'unidentified',
-            'name':         title or 'Unidentified Person',
+            'name':         name,
             'date':         date,
             'location':     loc or 'Unknown',
             'lat':          lat,
