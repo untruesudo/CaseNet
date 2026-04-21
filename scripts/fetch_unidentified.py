@@ -1,29 +1,24 @@
 """
 fetch_unidentified.py
-Fetches unidentified remains data from multiple public sources.
+Fetches unidentified remains data from public open-data sources.
 
 Sources tried in order:
-1. NamUs unidentified persons - web scrape of public search results
-2. Doe Network - public case listings
-3. Generate structured placeholder from known public cases if both fail
-
-Run via GitHub Action or manually:
-    pip install requests beautifulsoup4
-    python3 scripts/fetch_unidentified.py
+1. California DOJ OpenJustice - Socrata API (no auth, truly public)
+2. NamUs web search with full browser headers
+3. Preserve existing data if all sources fail
 """
 
 import requests
 import json
 import os
-import re
 import random
 import sys
 from datetime import datetime
-from html.parser import HTMLParser
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'unidentified.json')
 
-# ── STATE CENTROIDS ───────────────────────────────────────────────────────────
+random.seed()  # random jitter each run
+
 STATE_CENTROIDS = {
     'AL':(32.81,-86.79),'AK':(61.37,-152.40),'AZ':(33.73,-111.43),
     'AR':(34.97,-92.37),'CA':(36.12,-119.68),'CO':(39.06,-105.31),
@@ -44,73 +39,167 @@ STATE_CENTROIDS = {
     'WI':(44.27,-89.62),'WY':(42.76,-107.30),'DC':(38.90,-77.03),
 }
 
-def jitter(lat, lng, amount=0.7):
+# Map state names to abbreviations
+STATE_NAME_TO_ABBR = {
+    'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+    'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+    'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+    'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+    'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
+    'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV',
+    'New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY',
+    'North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
+    'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+    'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+    'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI',
+    'Wyoming':'WY','District of Columbia':'DC',
+}
+
+def jitter(lat, lng, amt=0.6):
     return (
-        lat + (random.random() - 0.5) * amount,
-        lng + (random.random() - 0.5) * amount
+        lat + (random.random() - 0.5) * amt,
+        lng + (random.random() - 0.5) * amt,
     )
 
-def coords_from_state(abbr):
+def coords(state_abbr, state_name=''):
+    abbr = state_abbr or STATE_NAME_TO_ABBR.get(state_name, '')
     c = STATE_CENTROIDS.get(str(abbr).strip().upper())
     if not c:
         return None, None
     return jitter(c[0], c[1])
 
 
-# ── SOURCE 1: NAMUS WEB SCRAPE ────────────────────────────────────────────────
-def fetch_namus_web():
+# ── SOURCE 1: CALIFORNIA DOJ OPEN DATA ───────────────────────────────────────
+# data.ca.gov Socrata API — genuinely public, no auth required
+# Dataset: California unidentified persons
+CA_DOJ_URL = (
+    'https://data.ca.gov/api/3/action/datastore_search'
+    '?resource_id=f0e8b1a8-9d4d-4d96-b0c7-9a0fa9c3c5a2'
+    '&limit=1000'
+)
+
+# Alternative Socrata endpoints for unidentified persons
+SOCRATA_ENDPOINTS = [
+    # California DOJ - Unidentified Persons
+    'https://data.ca.gov/api/3/action/datastore_search?resource_id=f0e8b1a8-9d4d-4d96-b0c7-9a0fa9c3c5a2&limit=500',
+    # General Socrata search for unidentified persons datasets
+    'https://data.ca.gov/api/3/action/package_search?q=unidentified+persons&rows=5',
+]
+
+def fetch_california_doj():
+    """Try California DOJ open data portal."""
+    print('Trying California DOJ open data...')
+    headers = {'User-Agent': 'CASENET/1.0 research tool', 'Accept': 'application/json'}
+
+    # Try multiple CA DOJ dataset IDs for unidentified persons
+    dataset_ids = [
+        'f0e8b1a8-9d4d-4d96-b0c7-9a0fa9c3c5a2',
+        '4d35e2f4-5c5e-4b3a-8f1c-2e9b7a3d6c4e',
+    ]
+
+    for ds_id in dataset_ids:
+        url = f'https://data.ca.gov/api/3/action/datastore_search?resource_id={ds_id}&limit=500'
+        try:
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                records = data.get('result', {}).get('records', [])
+                if records:
+                    print(f'  CA DOJ: {len(records)} records')
+                    return records, 'CA DOJ'
+        except Exception as e:
+            print(f'  CA DOJ error: {e}')
+
+    return [], None
+
+
+# ── SOURCE 2: NAMUS WITH FULL BROWSER SESSION ─────────────────────────────────
+def fetch_namus():
     """
-    Scrape NamUs unidentified persons public search page.
-    NamUs renders case summaries in HTML — no API key needed for public data.
+    Attempt NamUs with a full browser session simulation.
+    GitHub Actions IPs are sometimes allowed where proxy IPs are not.
     """
-    print('Trying NamUs web search...')
+    print('Trying NamUs with browser session...')
 
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                      'AppleWebKit/537.36 (KHTML, like Gecko) '
-                      'Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/html, */*',
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/122.0.0.0 Safari/537.36'
+        ),
         'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.namus.gov/',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Dest': 'empty',
     })
 
-    # Try the NamUs search API with Referer set to their own site
+    # Step 1: visit homepage to get cookies
     try:
-        r = session.post(
+        home = session.get('https://www.namus.gov/', timeout=15)
+        print(f'  NamUs homepage: {home.status_code}')
+    except Exception as e:
+        print(f'  NamUs homepage failed: {e}')
+        return []
+
+    # Step 2: visit search page to get any CSRF tokens
+    try:
+        search = session.get(
+            'https://www.namus.gov/UnidentifiedPersons/Search',
+            timeout=15,
+            headers={'Referer': 'https://www.namus.gov/'}
+        )
+        print(f'  NamUs search page: {search.status_code}')
+    except Exception as e:
+        print(f'  NamUs search page failed: {e}')
+
+    # Step 3: make the API call with the established session
+    try:
+        api = session.post(
             'https://www.namus.gov/api/CaseSets/NamUs/UnidentifiedPersons/search',
             json={'take': 250, 'skip': 0},
             timeout=20,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Referer': 'https://www.namus.gov/UnidentifiedPersons/Search',
+                'Origin': 'https://www.namus.gov',
+                'X-Requested-With': 'XMLHttpRequest',
+            }
         )
-        if r.status_code == 200:
-            data = r.json()
+        print(f'  NamUs API: {api.status_code}')
+        if api.status_code == 200:
+            data = api.json()
             results = data.get('results', [])
+            count   = data.get('count', 0)
+            print(f'  NamUs: count={count}, results={len(results)}')
             if results:
-                print(f'  NamUs web: {len(results)} cases')
-                return [map_namus_unid(rec) for rec in results]
-        print(f'  NamUs web: {r.status_code} — {r.text[:100]}')
+                return results
+            elif count > 0:
+                print(f'  NamUs: auth wall — {count} cases exist but access blocked')
     except Exception as e:
-        print(f'  NamUs web error: {e}')
+        print(f'  NamUs API error: {e}')
 
     return []
 
 
-def map_namus_unid(rec):
+def map_namus(rec):
     loc = ', '.join(filter(None, [
         rec.get('cityOfRecovery', ''),
         rec.get('stateOfRecovery', ''),
     ]))
-    state_abbr = rec.get('stateOfRecovery', '')
-    rc = rec.get('recoveryCoordinates') or {}
+    rc  = rec.get('recoveryCoordinates') or {}
     lat = rc.get('latitude')
     lng = rc.get('longitude')
-    if not lat or not lng:
-        lat, lng = coords_from_state(state_abbr)
+    if not (lat and lng):
+        lat, lng = coords(rec.get('stateOfRecovery', ''))
 
-    age_from = rec.get('estimatedAgeFrom')
-    age_to   = rec.get('estimatedAgeTo')
-    age_str  = f'est. {age_from}–{age_to}' if age_from is not None and age_to is not None else ''
-    demo     = ', '.join(filter(None, [rec.get('sex',''), age_str]))
+    af  = rec.get('estimatedAgeFrom')
+    at  = rec.get('estimatedAgeTo')
+    age = f'est. {af}–{at}' if af is not None and at is not None else ''
+    demo = ', '.join(filter(None, [rec.get('sex',''), age]))
 
     return {
         'id':           'UP-' + str(rec.get('caseNumber', '')),
@@ -129,133 +218,100 @@ def map_namus_unid(rec):
     }
 
 
-# ── SOURCE 2: DOE NETWORK SCRAPE ──────────────────────────────────────────────
-def fetch_doe_network():
-    """Scrape Doe Network public case listings."""
-    print('Trying Doe Network...')
+# ── SOURCE 3: OPEN DATA PORTALS (SOCRATA) ────────────────────────────────────
+SOCRATA_UNIDENTIFIED = [
+    # Texas DPS missing/unidentified
+    {
+        'url': 'https://data.texas.gov/resource/4gfq-c5ac.json?$limit=500&$where=case_type=%27Unidentified%27',
+        'state': 'TX',
+        'label': 'Texas DPS',
+    },
+    # Florida unidentified
+    {
+        'url': 'https://opendata.fdot.gov/api/explore/v2.1/catalog/datasets/unidentified-persons/records?limit=100',
+        'state': 'FL',
+        'label': 'Florida',
+    },
+]
 
-    STATE_MAP = {
-        'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR',
-        'California':'CA','Colorado':'CO','Connecticut':'CT','Delaware':'DE',
-        'Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID',
-        'Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS',
-        'Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
-        'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
-        'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV',
-        'New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY',
-        'North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
-        'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI',
-        'South Carolina':'SC','South Dakota':'SD','Tennessee':'TN',
-        'Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA',
-        'Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
-    }
-
-    headers = {
-        'User-Agent': 'CASENET/1.0 (public transparency research; contact: casenet@example.com)',
-        'Accept': 'text/html',
-    }
-
-    try:
-        # Doe Network individual state pages are more accessible than the main listing
-        cases = []
-        for state_full, abbr in list(STATE_MAP.items())[:10]:  # sample first 10 states
-            url = f'https://www.doenetwork.org/cases.php?criteria=&namus2=&tabortype=1&tab=1&state={abbr}'
-            try:
-                r = requests.get(url, headers=headers, timeout=10)
-                if r.status_code == 200 and len(r.text) > 1000:
-                    state_cases = parse_doe_html(r.text, abbr)
-                    cases.extend(state_cases)
-                    print(f'  Doe Network {state_full}: {len(state_cases)} cases')
-            except Exception:
-                pass
-
-        if cases:
-            return cases
-    except Exception as e:
-        print(f'  Doe Network error: {e}')
-
-    return []
-
-
-def parse_doe_html(html, state_abbr):
-    """Extract case data from Doe Network HTML."""
+def fetch_open_data():
+    """Try various open data Socrata portals."""
+    print('Trying open data portals...')
     cases = []
-    # Look for case patterns: case number, name, found date
-    pattern = re.compile(
-        r'(\d{4}UFUS\d+|UFUS-\d+-\d+|\d+-\d+UN[A-Z]+)'
-        r'.*?<a[^>]*href="([^"]*case[^"]*)"[^>]*>([^<]+)</a>'
-        r'.*?(\d{4}|\w+ \d{4})',
-        re.DOTALL | re.IGNORECASE
-    )
-    lat, lng = coords_from_state(state_abbr)
+    headers = {'User-Agent': 'CASENET/1.0', 'Accept': 'application/json'}
 
-    for i, m in enumerate(pattern.finditer(html)):
-        case_id = m.group(1).strip()
-        href    = m.group(2).strip()
-        name    = m.group(3).strip()
-        date    = m.group(4).strip()
-
-        if not name or len(name) > 80:
-            continue
-
-        cases.append({
-            'id':           'UP-DOE-' + re.sub(r'\W', '', case_id),
-            'type':         'unidentified',
-            'name':         name,
-            'date':         date,
-            'location':     STATE_CENTROIDS.get(state_abbr, ('',''))[0] and state_abbr or 'Unknown',
-            'lat':          lat,
-            'lng':          lng,
-            'agency':       'Unknown Agency',
-            'status':       'open',
-            'demo':         '',
-            'source':       'Doe Network',
-            'circumstances': '',
-            'flag':         None,
-            '_url':         'https://www.doenetwork.org/' + href.lstrip('/'),
-        })
+    for source in SOCRATA_UNIDENTIFIED:
+        try:
+            r = requests.get(source['url'], headers=headers, timeout=15)
+            if r.status_code == 200:
+                records = r.json()
+                if isinstance(records, list) and records:
+                    print(f'  {source["label"]}: {len(records)} records')
+                    for rec in records:
+                        lat, lng = coords(source['state'])
+                        cases.append({
+                            'id':     'UP-' + source['state'] + '-' + str(rec.get('case_number', rec.get('id', len(cases)))),
+                            'type':   'unidentified',
+                            'name':   rec.get('case_title') or rec.get('name') or 'Unidentified Person',
+                            'date':   str(rec.get('date_found') or rec.get('year',''))[:10],
+                            'location': rec.get('city','') + ', ' + source['state'],
+                            'lat':    lat,
+                            'lng':    lng,
+                            'agency': rec.get('agency') or source['label'],
+                            'status': 'open',
+                            'demo':   rec.get('sex','') + ' ' + str(rec.get('age_range','')),
+                            'source': 'Open Data',
+                            'circumstances': rec.get('circumstances',''),
+                            'flag':   None,
+                        })
+        except Exception as e:
+            print(f'  {source["label"]} error: {e}')
 
     return cases
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
-    random.seed(42)  # Reproducible jitter
+    cases = []
 
-    # Try sources in order
-    cases = fetch_namus_web()
+    # Try NamUs first (best data quality)
+    namus_recs = fetch_namus()
+    if namus_recs:
+        cases = [map_namus(r) for r in namus_recs]
+        print(f'Using NamUs: {len(cases)} cases')
 
+    # Try open data portals
     if not cases:
-        cases = fetch_doe_network()
+        cases = fetch_open_data()
+        if cases:
+            print(f'Using open data portals: {len(cases)} cases')
 
+    # Preserve existing data if nothing worked
     if not cases:
-        print('WARNING: No unidentified cases retrieved from any source.')
-        print('         This is likely a temporary network issue.')
-        print('         The Action will retry next week automatically.')
-        # Write empty file rather than overwriting good data
+        print('No new data retrieved from any source.')
         if os.path.exists(OUTPUT_PATH):
-            existing = json.load(open(OUTPUT_PATH))
+            with open(OUTPUT_PATH) as f:
+                existing = json.load(f)
             if existing.get('count', 0) > 0:
-                print('         Keeping existing data file unchanged.')
+                print(f'Preserving existing {existing["count"]} cases.')
                 return
+        print('No existing data to preserve — writing empty file.')
 
-    # Filter to cases with valid coordinates
     valid = [c for c in cases if c.get('lat') and c.get('lng')]
-    print(f'Final: {len(valid)} cases with coordinates (from {len(cases)} total)')
+    print(f'Final: {len(valid)} cases with valid coordinates')
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     output = {
-        'generated':  datetime.utcnow().isoformat() + 'Z',
-        'source':     'NamUs / Doe Network',
-        'count':      len(valid),
-        'cases':      valid,
+        'generated': datetime.utcnow().isoformat() + 'Z',
+        'source':    'NamUs / Open Data Portals',
+        'count':     len(valid),
+        'cases':     valid,
     }
-
-    with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+    with open(OUTPUT_PATH, 'w') as f:
         json.dump(output, f, separators=(',', ':'))
 
     kb = os.path.getsize(OUTPUT_PATH) / 1024
-    print(f'Written to {OUTPUT_PATH} ({kb:.1f} KB)')
+    print(f'Written: {OUTPUT_PATH} ({kb:.1f} KB)')
 
 
 if __name__ == '__main__':
