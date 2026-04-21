@@ -2,16 +2,16 @@ name: Update Case Data
 
 on:
   schedule:
-    # Runs every Sunday at 2:00 AM UTC
+    # Every Sunday at 2:00 AM UTC
     - cron: '0 2 * * 0'
   workflow_dispatch:
-    # Also allows manual trigger from GitHub Actions tab
+    # Manual trigger from Actions tab
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to commit back to repo
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -23,19 +23,30 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests beautifulsoup4
 
-      - name: Fetch and convert homicide data
+      - name: Fetch homicide data (Washington Post / MAP)
         run: python3 scripts/fetch_homicides.py
+        continue-on-error: true   # don't fail the whole job if one source is down
 
-      - name: Fetch and convert unidentified remains data
+      - name: Fetch unidentified remains data
         run: python3 scripts/fetch_unidentified.py
+        continue-on-error: true
 
-      - name: Commit updated data files
+      - name: Show data file sizes
+        run: |
+          echo "=== Data files generated ==="
+          ls -lh data/*.json || echo "No data files found"
+          echo ""
+          echo "Homicides:"
+          python3 -c "import json; d=json.load(open('data/homicides.json')); print(f'  {d[\"count\"]} cases, generated {d[\"generated\"]}')" 2>/dev/null || echo "  (not generated)"
+          echo "Unidentified:"
+          python3 -c "import json; d=json.load(open('data/unidentified.json')); print(f'  {d[\"count\"]} cases, generated {d[\"generated\"]}')" 2>/dev/null || echo "  (not generated)"
+
+      - name: Commit updated data
         run: |
           git config user.name  "CASENET Data Bot"
           git config user.email "actions@github.com"
           git add data/
-          # Only commit if there are changes
           git diff --staged --quiet || git commit -m "Auto-update case data [$(date -u '+%Y-%m-%d')]"
           git push
