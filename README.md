@@ -35,7 +35,7 @@ A public-facing visualization and aggregation tool for missing persons, unidenti
 | **Murder Accountability Project (MAP)** | Unsolved homicides, official case linkages | [murderdata.org](https://www.murderdata.org) |
 | **FBI Crime Data Explorer** | Aggregate crime statistics | [cde.ucr.cjis.fbi.gov](https://cde.ucr.cjis.fbi.gov) |
 
-Map tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions).
+Map tiles © [Esri](https://www.esri.com/), HERE, Garmin, © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
 ### Data Pipeline
 
@@ -73,7 +73,7 @@ Pure HTML/CSS/JS — no build tools, no framework, no package manager.
 | [Leaflet.MarkerCluster 1.5.3](https://github.com/Leaflet/Leaflet.markercluster) | Marker clustering | Dynamic (CDN) |
 | [Chart.js 4.4.0](https://www.chartjs.org) | Analytics charts | Lazy (CDN, Analytics tab only) |
 | [Barlow Condensed + IBM Plex Mono](https://fonts.google.com) | Typography | Google Fonts |
-| [CartoDB Basemaps](https://carto.com/basemaps) | Map tiles (light + dark) | Tile server |
+| [Esri Canvas Basemaps](https://server.arcgisonline.com/arcgis/rest/services) | Map tiles (light + dark), free & keyless | Tile server |
 
 Everything else is vanilla JS. The entire application is a single `index.html` file.
 

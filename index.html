@@ -1468,7 +1468,7 @@
                 <div style="margin-top:20px;padding:14px;border:1px solid var(--inner);font-family:'IBM Plex Mono',monospace;font-size:0.5rem;color:var(--muted);line-height:1.8;letter-spacing:0.05em;">
                     CASENET · PUBLIC CASE TRANSPARENCY NETWORK · PROTOTYPE · NOT AN OFFICIAL LAW ENFORCEMENT SYSTEM<br>
                     SOURCES: NAMUS.GOV · MURDERDATA.ORG · CDE.UCR.CJIS.FBI.GOV<br>
-                    MAP TILES: © OPENSTREETMAP CONTRIBUTORS · © CARTO<br>
+                    MAP TILES: © ESRI · HERE · GARMIN · © OPENSTREETMAP CONTRIBUTORS<br>
                     BUILT FOR PUBLIC AWARENESS AND INVESTIGATIVE TRANSPARENCY
                 </div>
             </div>
@@ -1634,10 +1634,16 @@ async function loadStaticData() {
 const TYPE_COLOR = { missing:"#d97706", unidentified:"#6b7280", homicide:"#dc2626" };
 const TYPE_LABEL = { missing:"Missing Persons", unidentified:"Unidentified Remains", homicide:"Unsolved Homicides" };
 
-// CartoDB basemap URLs
-const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+// Esri "Canvas" basemap tiles — genuinely free, anonymous, no API key required.
+// (Previously CARTO's basemaps.cartocdn.com — CARTO now requires a signed-up API
+// key for anonymous use and serves a watermarked "API KEY REQUIRED" placeholder
+// tile instead of real map imagery without one. Esri's Light/Dark Gray Canvas
+// services are a close aesthetic match and don't need any account or key.)
+const TILE_LIGHT = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const TILE_DARK  = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+// Native detail tops out around zoom 16 — Leaflet upscales beyond that (see maxNativeZoom below).
+const TILE_MAX_NATIVE_ZOOM = 16;
+const TILE_ATTR  = '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 const INITIAL_CENTER = [39.5, -98.35];
 const INITIAL_ZOOM   = 4;
@@ -1759,8 +1765,8 @@ function initLeaflet() {
 
     tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
         attribution: TILE_ATTR,
-        subdomains: 'abcd',
         maxZoom: 19,
+        maxNativeZoom: TILE_MAX_NATIVE_ZOOM,
     }).addTo(leafletMap);
 
     markerCluster = L.markerClusterGroup({
@@ -2358,7 +2364,7 @@ function toggleTheme() {
     if (leafletMap && tileLayer) {
         leafletMap.removeLayer(tileLayer);
         tileLayer = L.tileLayer(isDark ? TILE_DARK : TILE_LIGHT, {
-            attribution:TILE_ATTR, subdomains:'abcd', maxZoom:19,
+            attribution:TILE_ATTR, maxZoom:19, maxNativeZoom:TILE_MAX_NATIVE_ZOOM,
         }).addTo(leafletMap);
         if (patternLayer)  patternLayer.addTo(leafletMap);
         if (markerCluster) markerCluster.addTo(leafletMap);
